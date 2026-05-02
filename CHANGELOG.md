@@ -8,67 +8,77 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] — 2026-05-02
+
+Maturity foundation release. No runtime behavior changes for the happy path;
+adds OSS scaffolding, lint/type-check gates, a 77-test suite, friendly errors
+with request timeouts, and CI.
+
 ### Added
-- `plynth/errors.py` — user-facing error hierarchy: `PlynthError` (base) →
-  `AuthError`, `NotFoundError`, `NetworkError`, `ConfigError`. `GraphQLError`
-  is now also a `PlynthError` subclass so it's caught by the same handler.
-- `--timeout-seconds` CLI flag (default 30) on both `create` and `resolve`.
-- `request_timeout_s` parameter on `GHESClient`; threaded through to every
-  `session.post` call in `graphql_client` and `rest_client`.
-- `tests/test_errors.py` — covers 401→AuthError, "Could not resolve"→
-  NotFoundError, timeout→NetworkError, connection error→NetworkError, REST
-  401/404 mapping, and CLI top-level handler exit code 2.
 
-### Changed
-- `cli.main` now wraps the command dispatch in `try/except PlynthError`,
-  printing `Error: {e}` to stderr and exiting with code 2. Unexpected
-  exceptions still raise so tracebacks aren't hidden.
-- YAML and Pydantic validation failures during template/instance/state
-  loading now raise `ConfigError` with a friendly message instead of a
-  bare exception.
-- GraphQL "Could not resolve to ..." / "could not be found" errors are
-  classified as `NotFoundError` (with the GHES URL appended). Other
-  GraphQL errors still surface as `GraphQLError`.
-- HTTP-mocked integration tests under `tests/`:
-  - `test_api_base.py` — write-delay enforcement, retry-after handling,
-    exponential backoff on 503.
-  - `test_graphql_client.py` — happy-path coverage for every mutation/query
-    plus `GraphQLError` on `errors[]` response and HTTP error passthrough.
-  - `test_rest_client.py` — milestone create happy + 422 error.
-  - `test_phases_e2e.py` — orchestrator runs Phases 1, 2, 3, 4, 5, 7
-    (Phase 6 / views is intentionally skipped by the orchestrator) against
-    an in-test GraphQL dispatcher; asserts in-memory state, then reloads
-    the YAML state file and reasserts on-disk contents, then builds a
-    fresh orchestrator from the loaded state and confirms a second run
-    issues zero API calls (persisted resume path).
-- Test fixture `template_id`s switched from `{PREFIX}-NNN` to bare `NNN` to
-  match production templates.
+#### OSS scaffolding (PR 1)
+- LICENSE (Apache 2.0).
+- CHANGELOG.md, CONTRIBUTING.md, SECURITY.md.
+- GitHub issue and PR templates under `.github/`.
 
-### Added (PR 3)
-- Unit test foundation under `tests/`: shared fixtures
-  (`tests/fixtures/minimal-template.yaml`, `tests/fixtures/minimal-instance.yaml`),
-  conftest, and tests for `models.template`, `models.instance`, `models.state`,
-  `engine.planner`, `utils.references`, and CLI argument parsing
-  (41 tests, ~0.1s).
+#### Lint, format, and type-check (PR 2)
+- `[tool.ruff]` — lint + format configuration (line-length 100, target py39,
+  rules E/F/W/I/UP/B/SIM, with per-file ignores for the GraphQL query strings).
+- `[tool.mypy]` — strict mode, with narrow per-module overrides on
+  `engine.graphql_client`, `engine.rest_client`, and `engine.phases`.
+- `[tool.pytest.ini_options]` — `testpaths`, `--strict-markers`.
+- `plynth/py.typed` — PEP 561 marker so downstream consumers see plynth's
+  types.
 
-### Added (PR 2)
-- LICENSE (Apache 2.0)
-- CHANGELOG.md
-- CONTRIBUTING.md
-- SECURITY.md
-- GitHub issue and PR templates (`.github/`)
-- Ruff lint + format configuration (`[tool.ruff]`).
-- Mypy strict type-check configuration (`[tool.mypy]`).
-- Pytest configuration (`[tool.pytest.ini_options]`).
-- PEP 561 marker (`plynth/py.typed`) so downstream consumers see plynth's types.
+#### Tests (PRs 3 and 4)
+- `tests/` foundation with shared fixtures (`minimal-template.yaml`,
+  `minimal-instance.yaml`).
+- Unit tests for `models.template`, `models.instance`, `models.state`,
+  `engine.planner`, `utils.references`, and CLI argparse layout.
+- HTTP-mocked integration tests for `engine.api_base` (write-delay, retry),
+  `engine.graphql_client` (every mutation/query plus error paths),
+  `engine.rest_client` (milestone create + error mapping), and an end-to-end
+  orchestrator test running Phases 1, 2, 3, 4, 5, 7 against an in-test GraphQL
+  dispatcher; verifies state both in-memory and reloaded from disk, and
+  exercises the persisted resume path with a fresh orchestrator.
+
+#### Errors and timeouts (PR 5)
+- `plynth/errors.py` — `PlynthError` (base) → `AuthError`, `NotFoundError`,
+  `NetworkError`, `ConfigError`. `GraphQLError` is now a `PlynthError`.
+- `--timeout-seconds` CLI flag (default 30, must be > 0; validated by
+  argparse) on both `create` and `resolve`.
+- `request_timeout_s` parameter on `GHESClient`, threaded through every
+  `session.post` in `engine.graphql_client` and `engine.rest_client`.
+- Friendly error mapping:
+  - HTTP 401 → `AuthError("Token rejected by {ghes_url}; verify GHES_TOKEN
+    scopes include 'repo' and 'project'.")`
+  - REST 404 → `NotFoundError("Repository {owner}/{repo} not found on
+    {ghes_url}")`
+  - GraphQL "Could not resolve to ..." / "could not be found" → `NotFoundError`
+  - `requests.Timeout` / `ConnectionError` → `NetworkError` (with the
+    configured timeout in the message)
+- `cli.main` wraps dispatch in `try/except PlynthError` → prints
+  `Error: {e}` to stderr and exits with code 2. Unexpected exceptions still
+  raise so tracebacks aren't hidden in `--verbose`.
+- YAML / Pydantic validation failures during template/instance/state loading
+  now raise `ConfigError` with a friendly message.
+
+#### CI and release tooling (PR 6)
+- `.github/workflows/ci.yml` — matrix on Python 3.9 / 3.11 / 3.12. Steps:
+  ruff check, ruff format --check, mypy plynth, pytest -q.
+- `.github/dependabot.yml` — weekly updates for pip and github-actions.
 
 ### Changed
 - Codebase reformatted with `ruff format`.
-- `plynth/models/instance.py` — `start_date` validator now chains the underlying
+- `cli.py` — argparse setup extracted into `build_parser()` so tests can
+  exercise the real parser.
+- `models.instance` — `start_date` validator chains the underlying
   `ValueError` with `raise ... from e` (B904).
 
 ### Removed
-- Dead no-op loop in `plynth/engine/planner.py` dry-run formatter.
+- Dead no-op loop in `engine.planner` dry-run formatter.
 
 ---
 
@@ -109,5 +119,6 @@ Initial release. Core engine complete and functional against GHES 3.19.
   planner spec, API client spec, example template (17 issues, 5 milestones),
   and example instance config.
 
-[Unreleased]: https://github.com/Declaratus/plynth/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Declaratus/plynth/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Declaratus/plynth/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Declaratus/plynth/releases/tag/v0.1.0
