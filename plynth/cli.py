@@ -32,61 +32,36 @@ from plynth.models.template import TemplateDefinition
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="plynth",
-        description=(
-            "GitHub Projects as Code -- bootstrap GitHub Projects "
-            "from YAML templates."
-        ),
+        description=("GitHub Projects as Code -- bootstrap GitHub Projects from YAML templates."),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # --- create command ---
-    create_parser = subparsers.add_parser(
-        "create", help="Create a new project from template"
-    )
-    create_parser.add_argument(
-        "--template", required=True, help="Path to template YAML"
-    )
-    create_parser.add_argument(
-        "--instance", required=True, help="Path to instance config YAML"
-    )
+    create_parser = subparsers.add_parser("create", help="Create a new project from template")
+    create_parser.add_argument("--template", required=True, help="Path to template YAML")
+    create_parser.add_argument("--instance", required=True, help="Path to instance config YAML")
     create_parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without executing"
     )
-    create_parser.add_argument(
-        "--token", help="GHES PAT (or set GHES_TOKEN env var)"
-    )
-    create_parser.add_argument(
-        "--state-dir", default=".", help="Directory for state file output"
-    )
+    create_parser.add_argument("--token", help="GHES PAT (or set GHES_TOKEN env var)")
+    create_parser.add_argument("--state-dir", default=".", help="Directory for state file output")
     create_parser.add_argument(
         "--write-delay-ms",
         type=int,
         default=1000,
         help="Delay between API writes (ms)",
     )
-    create_parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Verbose logging"
-    )
+    create_parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
 
     # --- resolve command ---
     resolve_parser = subparsers.add_parser(
         "resolve", help="Re-resolve cross-references from state file"
     )
-    resolve_parser.add_argument(
-        "--state", required=True, help="Path to existing state file"
-    )
-    resolve_parser.add_argument(
-        "--template", required=True, help="Path to template YAML"
-    )
-    resolve_parser.add_argument(
-        "--instance", required=True, help="Path to instance config YAML"
-    )
-    resolve_parser.add_argument(
-        "--token", help="GHES PAT (or set GHES_TOKEN env var)"
-    )
-    resolve_parser.add_argument(
-        "-v", "--verbose", action="store_true"
-    )
+    resolve_parser.add_argument("--state", required=True, help="Path to existing state file")
+    resolve_parser.add_argument("--template", required=True, help="Path to template YAML")
+    resolve_parser.add_argument("--instance", required=True, help="Path to instance config YAML")
+    resolve_parser.add_argument("--token", help="GHES PAT (or set GHES_TOKEN env var)")
+    resolve_parser.add_argument("-v", "--verbose", action="store_true")
 
     args = parser.parse_args()
 
@@ -122,20 +97,13 @@ def _cmd_create(args: argparse.Namespace, log: logging.Logger) -> None:
     token = _get_token(args)
 
     # 5. Initialize clients
-    base = GHESClient(
-        instance.ghes_url, token, write_delay_ms=args.write_delay_ms
-    )
+    base = GHESClient(instance.ghes_url, token, write_delay_ms=args.write_delay_ms)
     gql = GraphQLClient(base)
     rest = RESTClient(base)
 
     # 6. Initialize or resume state file
-    state_path = (
-        Path(args.state_dir)
-        / f"{_slugify(execution_plan.project_name)}.plynth-state.yaml"
-    )
-    state = _init_or_load_state(
-        state_path, args.template, args.instance, instance, log
-    )
+    state_path = Path(args.state_dir) / f"{_slugify(execution_plan.project_name)}.plynth-state.yaml"
+    state = _init_or_load_state(state_path, args.template, args.instance, instance, log)
 
     # 7. Execute
     orchestrator = PhaseOrchestrator(

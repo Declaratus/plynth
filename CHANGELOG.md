@@ -14,6 +14,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - CONTRIBUTING.md
 - SECURITY.md
 - GitHub issue and PR templates (`.github/`)
+- Ruff lint + format configuration (`[tool.ruff]`).
+- Mypy strict type-check configuration (`[tool.mypy]`).
+- Pytest configuration (`[tool.pytest.ini_options]`).
+- PEP 561 marker (`plynth/py.typed`) so downstream consumers see plynth's types.
+
+### Changed
+- Codebase reformatted with `ruff format`.
+- `plynth/models/instance.py` — `start_date` validator now chains the underlying
+  `ValueError` with `raise ... from e` (B904).
+
+### Removed
+- Dead no-op loop in `plynth/engine/planner.py` dry-run formatter.
 
 ---
 
@@ -50,7 +62,7 @@ Initial release. Core engine complete and functional against GHES 3.19.
   `--dry-run`, `--token`, `--state-dir`, `--write-delay-ms`, `--verbose`.
 - **GraphQL query/mutation strings** (`plynth/queries/`) — all mutations and
   queries as module-level constants.
-- **Sanitized agent-reference docs** (`docs/`) — design spec, orchestrator spec,
+- **agent-reference docs** (`docs/`) — design spec, orchestrator spec,
   planner spec, API client spec, example template (17 issues, 5 milestones),
   and example instance config.
 

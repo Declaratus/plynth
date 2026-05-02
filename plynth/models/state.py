@@ -119,9 +119,7 @@ class StateFile(BaseModel):
         self.updated_at = self._now_iso()
 
     def mark_phase_complete(self, phase: str) -> None:
-        self.phases[phase] = PhaseStatus(
-            completed=True, completed_at=self._now_iso()
-        )
+        self.phases[phase] = PhaseStatus(completed=True, completed_at=self._now_iso())
         self.touch()
 
     def mark_phase_error(self, phase: str, error: str) -> None:

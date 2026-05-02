@@ -47,3 +47,39 @@ Issues = "https://github.com/declaratus/plynth/issues"
 
 [project.scripts]
 plynth = "plynth.cli:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"plynth/queries/*.py" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+pretty = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["yaml", "responses"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["plynth.engine.graphql_client", "plynth.engine.rest_client"]
+disable_error_code = ["type-arg", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = ["plynth.engine.phases"]
+disable_error_code = ["union-attr"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
