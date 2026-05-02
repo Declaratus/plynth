@@ -135,45 +135,35 @@ class TemplateDefinition(BaseModel):
             for ref in issue.blocked_by:
                 if ref not in template_ids:
                     errors.append(
-                        f"Issue {issue.template_id}: blocked_by ref "
-                        f"'{ref}' not found in issues"
+                        f"Issue {issue.template_id}: blocked_by ref '{ref}' not found in issues"
                     )
 
             for ref in issue.blocks:
                 if ref not in template_ids:
                     errors.append(
-                        f"Issue {issue.template_id}: blocks ref "
-                        f"'{ref}' not found in issues"
+                        f"Issue {issue.template_id}: blocks ref '{ref}' not found in issues"
                     )
 
             for field_key in issue.fields:
                 if field_key not in field_ids:
                     errors.append(
-                        f"Issue {issue.template_id}: field key "
-                        f"'{field_key}' not found in fields"
+                        f"Issue {issue.template_id}: field key '{field_key}' not found in fields"
                     )
 
         if self.pruning:
             if self.pruning.trigger_issue not in template_ids:
                 errors.append(
-                    f"Pruning trigger_issue '{self.pruning.trigger_issue}' "
-                    f"not found in issues"
+                    f"Pruning trigger_issue '{self.pruning.trigger_issue}' not found in issues"
                 )
             for rule in self.pruning.rules:
                 for ref in rule.keep_issues:
                     if ref not in template_ids:
-                        errors.append(
-                            f"Pruning keep_issues ref '{ref}' not found in issues"
-                        )
+                        errors.append(f"Pruning keep_issues ref '{ref}' not found in issues")
                 for ref in rule.remove_issues:
                     if ref not in template_ids:
-                        errors.append(
-                            f"Pruning remove_issues ref '{ref}' not found in issues"
-                        )
+                        errors.append(f"Pruning remove_issues ref '{ref}' not found in issues")
 
         if errors:
-            raise ValueError(
-                "Template reference validation failed:\n  " + "\n  ".join(errors)
-            )
+            raise ValueError("Template reference validation failed:\n  " + "\n  ".join(errors))
 
         return self

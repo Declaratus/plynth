@@ -26,11 +26,7 @@ def resolve_crossrefs(
 
     # Sort longest first to avoid partial matches
     sorted_refs = sorted(all_refs, key=len, reverse=True)
-    pattern = re.compile(
-        r"(?<!\w)("
-        + "|".join(re.escape(ref) for ref in sorted_refs)
-        + r")(?!\w)"
-    )
+    pattern = re.compile(r"(?<!\w)(" + "|".join(re.escape(ref) for ref in sorted_refs) + r")(?!\w)")
 
     def _replace(match: re.Match[str]) -> str:
         ref = match.group(1)

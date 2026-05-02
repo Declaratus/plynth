@@ -45,8 +45,6 @@ class InstanceConfig(BaseModel):
         if v is not None:
             try:
                 date.fromisoformat(v)
-            except ValueError:
-                raise ValueError(
-                    f"start_date must be YYYY-MM-DD format, got '{v}'"
-                )
+            except ValueError as e:
+                raise ValueError(f"start_date must be YYYY-MM-DD format, got '{v}'") from e
         return v

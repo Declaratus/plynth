@@ -47,18 +47,14 @@ def resolve_placeholders(
     return text
 
 
-def _calculate_due_date(
-    start_date_str: str | None, offset_weeks: int
-) -> str | None:
+def _calculate_due_date(start_date_str: str | None, offset_weeks: int) -> str | None:
     if start_date_str is None:
         return None
     start = date.fromisoformat(start_date_str)
     return (start + timedelta(weeks=offset_weeks)).isoformat()
 
 
-def plan(
-    template: TemplateDefinition, instance: InstanceConfig
-) -> ExecutionPlan:
+def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPlan:
     """Build a fully resolved execution plan from template + instance config.
 
     Pure computation — no API calls. Validates placeholder coverage, computes
@@ -75,9 +71,7 @@ def plan(
         if spec.required and (key not in values or not values[key])
     ]
     if missing:
-        raise ValueError(
-            f"Missing required placeholder values: {', '.join(sorted(missing))}"
-        )
+        raise ValueError(f"Missing required placeholder values: {', '.join(sorted(missing))}")
 
     # ── Step 2: Effective milestones ───────────────────────────────
     skip_ms = set(instance.skip_milestones)
@@ -93,11 +87,7 @@ def plan(
     ]
 
     # ── Step 3: Effective issues ───────────────────────────────────
-    skipped_by_milestone = {
-        i.template_id
-        for i in template.issues
-        if i.milestone_id in skip_ms
-    }
+    skipped_by_milestone = {i.template_id for i in template.issues if i.milestone_id in skip_ms}
     skipped_individually = set(instance.skip_issues)
 
     skipped_by_pruning: set[str] = set()
@@ -111,9 +101,7 @@ def plan(
                     break
 
     all_skipped = skipped_by_milestone | skipped_individually | skipped_by_pruning
-    effective_issues = [
-        i for i in template.issues if i.template_id not in all_skipped
-    ]
+    effective_issues = [i for i in template.issues if i.template_id not in all_skipped]
     valid_ids = {i.template_id for i in effective_issues}
 
     # ── Step 4 & 5: Resolve placeholders + trim deps ──────────────
@@ -125,9 +113,7 @@ def plan(
             fields.update(instance.field_overrides[issue.template_id])
 
         # Resolve placeholders in field option values
-        resolved_fields = {
-            k: resolve_placeholders(v, values) for k, v in fields.items()
-        }
+        resolved_fields = {k: resolve_placeholders(v, values) for k, v in fields.items()}
 
         # Trim dependency graph
         good_bb: list[str] = []
@@ -149,17 +135,13 @@ def plan(
                 good_bl.append(ref)
             else:
                 skip_bl.append(ref)
-                warnings.append(
-                    f"Issue {issue.template_id}: blocks ref '{ref}' was skipped"
-                )
+                warnings.append(f"Issue {issue.template_id}: blocks ref '{ref}' was skipped")
 
         resolved_issues.append(
             ResolvedIssue(
                 template_id=issue.template_id,
                 title=resolve_placeholders(issue.title, values),
-                body=resolve_placeholders(
-                    issue.body, values, preserve_crossrefs=True
-                ),
+                body=resolve_placeholders(issue.body, values, preserve_crossrefs=True),
                 milestone_id=issue.milestone_id,
                 fields=resolved_fields,
                 blocked_by=good_bb,
@@ -181,9 +163,7 @@ def plan(
     ]
 
     # ── Step 8: Resolve project description ({DATE}) ──────────────
-    project_desc = instance.project.description.replace(
-        "{DATE}", date.today().isoformat()
-    )
+    project_desc = instance.project.description.replace("{DATE}", date.today().isoformat())
 
     # ── Step 9: Assemble ───────────────────────────────────────────
     return ExecutionPlan(
@@ -206,9 +186,7 @@ def plan(
     )
 
 
-def all_skipped_milestones(
-    skip_ms: set[str], template: TemplateDefinition
-) -> list[str]:
+def all_skipped_milestones(skip_ms: set[str], template: TemplateDefinition) -> list[str]:
     """Return milestone IDs that were actually skipped (exist in template)."""
     return [m.id for m in template.milestones if m.id in skip_ms]
 
@@ -237,10 +215,7 @@ def format_dry_run(ep: ExecutionPlan) -> str:
     if ep.skipped_milestones:
         w(f"Skipped milestones: {', '.join(ep.skipped_milestones)}")
     if ep.skipped_issues:
-        w(
-            f"Skipped issues ({len(ep.skipped_issues)}): "
-            f"{', '.join(ep.skipped_issues)}"
-        )
+        w(f"Skipped issues ({len(ep.skipped_issues)}): {', '.join(ep.skipped_issues)}")
     if ep.skipped_milestones or ep.skipped_issues:
         w("")
 
@@ -268,9 +243,6 @@ def format_dry_run(ep: ExecutionPlan) -> str:
     w(f"Fields ({len(ep.fields)}):")
     for f in ep.fields:
         w(f"  {f.id}: {f.name} [{f.type}] ({len(f.options)} options)")
-        # Show any options that had placeholders resolved
-        for orig_f in ep.fields:
-            pass  # options are already resolved
     w("")
 
     # Warnings
@@ -287,14 +259,7 @@ def format_dry_run(ep: ExecutionPlan) -> str:
     n_deps = sum(len(i.blocked_by) for i in ep.issues)
     n_body_updates = n_issues
     n_add_to_project = n_issues
-    total = (
-        n_milestones
-        + n_issues
-        + n_add_to_project
-        + n_field_values
-        + n_body_updates
-        + n_deps
-    )
+    total = n_milestones + n_issues + n_add_to_project + n_field_values + n_body_updates + n_deps
 
     w("API call estimate:")
     w(f"  Milestones:     {n_milestones} REST calls")

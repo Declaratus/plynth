@@ -98,9 +98,7 @@ class PhaseOrchestrator:
 
         # 1a. Resolve org and repo IDs
         org_id = self.gql.get_org_id(self.plan.instance_org)
-        repo_id = self.gql.get_repo_id(
-            self.plan.instance_org, self.plan.instance_repo
-        )
+        repo_id = self.gql.get_repo_id(self.plan.instance_org, self.plan.instance_repo)
         self.state.repo = RepoState(name=self.plan.instance_repo, node_id=repo_id)
 
         # 1b. Create the project
@@ -110,16 +108,13 @@ class PhaseOrchestrator:
             url=project["url"],
             number=project["number"],
         )
-        self.log.info(
-            f"Created project: {self.plan.project_name} ({project['url']})"
-        )
+        self.log.info(f"Created project: {self.plan.project_name} ({project['url']})")
 
         # 1c. Create custom fields
         for field in self.plan.fields:
             if field.type == "single_select":
                 options = [
-                    {"name": opt, "color": "GRAY", "description": ""}
-                    for opt in field.options
+                    {"name": opt, "color": "GRAY", "description": ""} for opt in field.options
                 ]
                 self.gql.create_field(
                     project_id=self.state.project.node_id,
@@ -127,9 +122,7 @@ class PhaseOrchestrator:
                     data_type="SINGLE_SELECT",
                     options=options,
                 )
-                self.log.info(
-                    f"Created field: {field.name} ({len(field.options)} options)"
-                )
+                self.log.info(f"Created field: {field.name} ({len(field.options)} options)")
 
         # 1d. Re-query to get actual field IDs and option IDs
         raw_fields = self.gql.get_project_fields(self.state.project.node_id)
@@ -155,9 +148,7 @@ class PhaseOrchestrator:
                 for opt in raw["options"]:
                     options_map[opt["name"]] = opt["id"]
 
-            self.state.fields[field_def.id] = FieldState(
-                node_id=raw["id"], options=options_map
-            )
+            self.state.fields[field_def.id] = FieldState(node_id=raw["id"], options=options_map)
 
     # ── Phase 2: Create Milestones ─────────────────────────
 
@@ -181,9 +172,7 @@ class PhaseOrchestrator:
                 node_id=result["node_id"],
                 title=result["title"],
             )
-            self.log.info(
-                f"Created milestone: {ms.title} (#{result['number']})"
-            )
+            self.log.info(f"Created milestone: {ms.title} (#{result['number']})")
 
     # ── Phase 3: Create Issues ─────────────────────────────
 
@@ -192,9 +181,7 @@ class PhaseOrchestrator:
         for issue in self.plan.issues:
             milestone_node_id = None
             if issue.milestone_id in self.state.milestones:
-                milestone_node_id = self.state.milestones[
-                    issue.milestone_id
-                ].node_id
+                milestone_node_id = self.state.milestones[issue.milestone_id].node_id
 
             result = self.gql.create_issue(
                 repository_id=self.state.repo.node_id,
@@ -243,10 +230,7 @@ class PhaseOrchestrator:
             # 4c. Set custom field values
             for field_key, option_display_value in issue.fields.items():
                 if field_key not in self.state.fields:
-                    self.log.warning(
-                        f"Field '{field_key}' not found in project fields, "
-                        f"skipping"
-                    )
+                    self.log.warning(f"Field '{field_key}' not found in project fields, skipping")
                     continue
 
                 field_state = self.state.fields[field_key]
@@ -267,8 +251,7 @@ class PhaseOrchestrator:
                 )
 
             self.log.info(
-                f"Added #{issue_state.number} to project and set "
-                f"{len(issue.fields)} field values"
+                f"Added #{issue_state.number} to project and set {len(issue.fields)} field values"
             )
 
     # ── Phase 5: Resolve Cross-References + Dependencies ───
@@ -296,9 +279,7 @@ class PhaseOrchestrator:
 
             if resolved_body != issue.body:
                 self.gql.update_issue_body(issue_state.node_id, resolved_body)
-                issue_state.body_sha256 = hashlib.sha256(
-                    resolved_body.encode()
-                ).hexdigest()
+                issue_state.body_sha256 = hashlib.sha256(resolved_body.encode()).hexdigest()
                 self.log.info(f"Resolved cross-refs in #{issue_state.number}")
 
         # 5c. Wire dependency edges via addBlockedBy
@@ -321,9 +302,7 @@ class PhaseOrchestrator:
                     blocking_issue_id=blocker_state.node_id,
                 )
                 self.state.dependencies_created.append(
-                    DependencyEdge(
-                        blocker=blocker_id, blocked=issue.template_id
-                    )
+                    DependencyEdge(blocker=blocker_id, blocked=issue.template_id)
                 )
 
             # blocks: target is blocked by this issue
@@ -333,9 +312,7 @@ class PhaseOrchestrator:
                 blocked_state = self.state.issues[blocked_id]
 
                 # Deduplicate: skip if already created from the other direction
-                edge = DependencyEdge(
-                    blocker=issue.template_id, blocked=blocked_id
-                )
+                edge = DependencyEdge(blocker=issue.template_id, blocked=blocked_id)
                 if edge not in self.state.dependencies_created:
                     self.gql.add_blocked_by(
                         issue_id=blocked_state.node_id,
@@ -345,10 +322,7 @@ class PhaseOrchestrator:
 
             dep_count = len(issue.blocked_by) + len(issue.blocks)
             if dep_count > 0:
-                self.log.info(
-                    f"Wired {dep_count} dependencies for "
-                    f"#{issue_state.number}"
-                )
+                self.log.info(f"Wired {dep_count} dependencies for #{issue_state.number}")
 
     def _build_skipped_ref_set(self, issue: ResolvedIssue) -> set[str]:
         """Build set of {PREFIX}-### strings for skipped dependencies."""
