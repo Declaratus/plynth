@@ -8,13 +8,7 @@ cd plynth
 pip install -e ".[dev]"
 ```
 
-The `[dev]` extra (added in v0.2) includes pytest, ruff, and mypy.
-Until v0.2 is released, install dev dependencies manually:
-
-```bash
-pip install pytest pytest-mock responses ruff mypy types-requests types-PyYAML
-pip install -e .
-```
+The `[dev]` extra includes pytest, ruff, mypy, and the test helpers.
 
 ## Running tests
 
@@ -27,13 +21,20 @@ no live GitHub or GHES instance required.
 
 ## Lint and type-check
 
+Check (what CI runs — must pass before opening a PR):
+
 ```bash
 ruff check .
 ruff format --check .
 mypy plynth
 ```
 
-All three must pass cleanly before opening a PR.
+Apply formatting locally (modifies files in place):
+
+```bash
+ruff format .
+```
+
 Configuration lives in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]`.
 
 ## Commit messages
@@ -55,7 +56,7 @@ Reference issues where applicable: `fixes #42`.
 
 1. Fork or branch from `main`.
 2. Make changes. Add or update tests for any behaviour change.
-3. Run `ruff check .`, `ruff format .`, `mypy plynth`, and `pytest -q` locally.
+3. Run `ruff check .`, `ruff format --check .`, `mypy plynth`, and `pytest -q` locally.
 4. Update `CHANGELOG.md` under `## [Unreleased]`.
 5. Open a PR against `main`. Fill in the PR template.
 6. CI must pass before merge.

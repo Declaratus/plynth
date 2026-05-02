@@ -13,7 +13,10 @@ plynth requires a GitHub Personal Access Token (PAT) with `repo` and `project` s
 **Do not:**
 - Commit tokens to any repository — including instance config YAML files.
 - Log tokens or include them in bug reports.
-- Set tokens in shell history (use `read -s GHES_TOKEN` or equivalent).
+- Set tokens in shell history. To avoid this, use:
+  ```bash
+  read -rs GHES_TOKEN && export GHES_TOKEN
+  ```
 
 Instance config files (`*.yaml`) intentionally have no `token` field.
 The token is always supplied at runtime, never stored in YAML.
