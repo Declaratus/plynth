@@ -89,29 +89,33 @@ def test_graphql_connection_error_raises_network_error() -> None:
         _gql().get_org_id("nope")
 
 
-def test_graphql_timeout_value_threaded_from_client() -> None:
-    """The timeout passed to session.post should be the client's request_timeout_s."""
+def test_graphql_timeout_kwarg_passed_to_session_post() -> None:
+    """The client's `request_timeout_s` must be forwarded to session.post as
+    the `timeout=` kwarg — not just embedded in error messages. Patch
+    session.post to capture the kwargs and assert the value directly."""
+    from unittest.mock import MagicMock, patch
+
+    base = GHESClient(GHES_URL, "tok", write_delay_ms=0, request_timeout_s=7)
+    gql = GraphQLClient(base)
+
+    fake_response = MagicMock()
+    fake_response.ok = True
+    fake_response.json.return_value = {"data": {"organization": {"id": "O_1"}}}
+
+    with patch.object(base.session, "post", return_value=fake_response) as mock_post:
+        gql.get_org_id("example-org")
+
+    mock_post.assert_called_once()
+    assert mock_post.call_args.kwargs["timeout"] == 7
+
+
+def test_graphql_timeout_message_uses_configured_value() -> None:
+    """A timeout error surfaces with the client's configured timeout in the message."""
     base = GHESClient(GHES_URL, "tok", write_delay_ms=0, request_timeout_s=7)
     gql = GraphQLClient(base)
 
     @responses.activate
     def _do() -> None:
-        responses.add(
-            responses.POST,
-            GRAPHQL_URL,
-            json={"data": {"organization": {"id": "O_1"}}},
-            status=200,
-        )
-        gql.get_org_id("example-org")
-        # The Request object captured by `responses` doesn't expose timeout, so
-        # we instead check that a NetworkError surfaces when the call times out
-        # mentioning the configured value.
-
-    _do()
-
-    # Now test the timeout message uses the configured value.
-    @responses.activate
-    def _timeout_check() -> None:
         def _timeout(_req: object) -> None:
             raise requests.Timeout()
 
@@ -119,7 +123,7 @@ def test_graphql_timeout_value_threaded_from_client() -> None:
         with pytest.raises(NetworkError, match="timed out after 7s"):
             gql.get_org_id("nope")
 
-    _timeout_check()
+    _do()
 
 
 # ── REST client ────────────────────────────────────────────────

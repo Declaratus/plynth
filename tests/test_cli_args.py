@@ -43,3 +43,51 @@ def test_unknown_subcommand_rejected() -> None:
     parser = build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["bogus"])
+
+
+def test_timeout_seconds_rejects_zero() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "create",
+                "--template",
+                "t.yaml",
+                "--instance",
+                "i.yaml",
+                "--timeout-seconds",
+                "0",
+            ]
+        )
+
+
+def test_timeout_seconds_rejects_negative() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "create",
+                "--template",
+                "t.yaml",
+                "--instance",
+                "i.yaml",
+                "--timeout-seconds",
+                "-5",
+            ]
+        )
+
+
+def test_timeout_seconds_accepts_positive() -> None:
+    parser = build_parser()
+    ns = parser.parse_args(
+        [
+            "create",
+            "--template",
+            "t.yaml",
+            "--instance",
+            "i.yaml",
+            "--timeout-seconds",
+            "60",
+        ]
+    )
+    assert ns.timeout_seconds == 60

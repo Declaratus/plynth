@@ -31,6 +31,17 @@ from plynth.models.state import (
 from plynth.models.template import TemplateDefinition
 
 
+def _positive_int(value: str) -> int:
+    """argparse type for flags that must be a positive integer."""
+    try:
+        ivalue = int(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"expected integer, got '{value}'") from e
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"must be > 0, got {ivalue}")
+    return ivalue
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the plynth argparse parser. Exposed for test reuse."""
     parser = argparse.ArgumentParser(
@@ -56,9 +67,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     create_parser.add_argument(
         "--timeout-seconds",
-        type=int,
+        type=_positive_int,
         default=30,
-        help="Per-request HTTP timeout (seconds, default 30)",
+        help="Per-request HTTP timeout (seconds, default 30, must be > 0)",
     )
     create_parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
 
@@ -72,9 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_parser.add_argument("--token", help="GHES PAT (or set GHES_TOKEN env var)")
     resolve_parser.add_argument(
         "--timeout-seconds",
-        type=int,
+        type=_positive_int,
         default=30,
-        help="Per-request HTTP timeout (seconds, default 30)",
+        help="Per-request HTTP timeout (seconds, default 30, must be > 0)",
     )
     resolve_parser.add_argument("-v", "--verbose", action="store_true")
 
