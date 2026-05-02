@@ -9,6 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Added
+- HTTP-mocked integration tests under `tests/`:
+  - `test_api_base.py` — write-delay enforcement, retry-after handling,
+    exponential backoff on 503.
+  - `test_graphql_client.py` — happy-path coverage for every mutation/query
+    plus `GraphQLError` on `errors[]` response and HTTP error passthrough.
+  - `test_rest_client.py` — milestone create happy + 422 error.
+  - `test_phases_e2e.py` — full Phase 1→7 happy path against an in-test
+    GraphQL dispatcher; asserts state file contents and that a second run
+    is a no-op (resume behavior).
+- Test fixture `template_id`s switched from `{PREFIX}-NNN` to bare `NNN` to
+  match production templates.
+
+### Added (PR 3)
 - Unit test foundation under `tests/`: shared fixtures
   (`tests/fixtures/minimal-template.yaml`, `tests/fixtures/minimal-instance.yaml`),
   conftest, and tests for `models.template`, `models.instance`, `models.state`,

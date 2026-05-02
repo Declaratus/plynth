@@ -41,20 +41,20 @@ milestones:
     optional: true
 
 issues:
-  - template_id: "{PREFIX}-001"
+  - template_id: "001"
     title: "Bootstrap {APP}"
     milestone_id: M1
     fields: {priority: "P1"}
     body: "Set up initial scaffolding for {APP}."
-  - template_id: "{PREFIX}-002"
+  - template_id: "002"
     title: "Configure {APP}"
     milestone_id: M1
     fields: {priority: "P2"}
-    blocked_by: ["{PREFIX}-001"]
+    blocked_by: ["001"]
     body: "Depends on {PREFIX}-001 completing."
-  - template_id: "{PREFIX}-003"
+  - template_id: "003"
     title: "Harden {APP}"
     milestone_id: M2
     fields: {priority: "{TEAM}"}
-    blocked_by: ["{PREFIX}-002"]
-    body: "Final hardening of {APP}."
+    blocked_by: ["002"]
+    body: "Final hardening of {APP}. After {PREFIX}-002."

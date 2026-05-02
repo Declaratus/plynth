@@ -82,11 +82,11 @@ def test_plan_skip_milestone_cascades(
     minimal_instance.skip_milestones = ["M2"]
     ep = plan(minimal_template, minimal_instance)
     assert [m.id for m in ep.milestones] == ["M1"]
-    # ACME-003 lives on M2 → should be skipped
+    # 003 lives on M2 → should be skipped
     issue_ids = [i.template_id for i in ep.issues]
-    assert "{PREFIX}-003" not in issue_ids
-    assert "{PREFIX}-001" in issue_ids
-    assert "{PREFIX}-002" in issue_ids
+    assert "003" not in issue_ids
+    assert "001" in issue_ids
+    assert "002" in issue_ids
 
 
 def test_plan_skip_milestone_trims_dependencies(
@@ -94,12 +94,12 @@ def test_plan_skip_milestone_trims_dependencies(
 ) -> None:
     minimal_instance.skip_milestones = ["M1"]
     ep = plan(minimal_template, minimal_instance)
-    # All deps should be trimmed since M1 is gone (ACME-001, ACME-002 removed)
+    # All deps should be trimmed since M1 is gone (001, 002 removed)
     only_issue = ep.issues[0]
-    assert only_issue.template_id == "{PREFIX}-003"
+    assert only_issue.template_id == "003"
     assert only_issue.blocked_by == []
     # The skipped ref should be recorded
-    assert "{PREFIX}-002" in only_issue.skipped_blocked_by
+    assert "002" in only_issue.skipped_blocked_by
     assert ep.warnings, "Expected warnings about trimmed deps"
 
 
