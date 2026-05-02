@@ -14,6 +14,7 @@ class GHESClient:
         token: str,
         write_delay_ms: int = 1000,
         max_retries: int = 3,
+        request_timeout_s: int = 30,
     ):
         self.ghes_url = ghes_url
         self.session = requests.Session()
@@ -25,6 +26,7 @@ class GHESClient:
         )
         self.write_delay_ms = write_delay_ms
         self.max_retries = max_retries
+        self.request_timeout_s = request_timeout_s
         self._last_write_time: float = 0.0
 
     def _wait_for_write_delay(self) -> None:

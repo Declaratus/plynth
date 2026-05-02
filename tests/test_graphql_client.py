@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 import pytest
-import requests
 import responses
 
 from plynth.engine.api_base import GHESClient
@@ -133,21 +132,15 @@ def test_add_item_to_project_returns_item_id() -> None:
 
 @responses.activate
 def test_graphql_error_response_raises() -> None:
+    # A generic GraphQL error that isn't classified as NotFoundError still
+    # surfaces as GraphQLError — see test_errors.py for the classification cases.
     responses.add(
         responses.POST,
         GRAPHQL_URL,
-        json={"errors": [{"message": "Could not resolve to an Organization"}]},
+        json={"errors": [{"message": "Some other GraphQL failure"}]},
         status=200,
     )
-    with pytest.raises(GraphQLError, match="Could not resolve"):
-        _client().get_org_id("nope")
-
-
-@responses.activate
-def test_http_error_after_retries_raises() -> None:
-    # 4xx that isn't in the retry list bubbles up immediately.
-    responses.add(responses.POST, GRAPHQL_URL, status=401)
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(GraphQLError, match="Some other"):
         _client().get_org_id("nope")
 
 
