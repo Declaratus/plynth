@@ -1,0 +1,62 @@
+# example-instance.yaml
+# Instance config for a single instantiation of example-template.yaml.
+# One instance file per project. Supplies concrete values for all
+# required placeholders and controls which milestones/issues are created.
+---
+template: example-template.yaml
+
+# GitHub API base URL.
+# GitHub.com: "https://api.github.com"  (github.com URL handling: near-term roadmap)
+# GHES:       "https://ghes.example.com"
+ghes_url: "https://ghes.example.com"
+
+# Organization (or user) that owns the target repository and project board.
+org: "myorg"
+
+# Placeholder values -- must cover every required placeholder in the template.
+values:
+  APP: "Acme Scheduler"
+  PREFIX: "ACME"
+  TEAM: "Platform Engineering"
+
+# Target repository where issues and milestones will be created.
+# create: false means the repository already exists.
+#   The engine resolves the repository node_id by name, regardless of
+#   existing issue numbers (non-sequential issue numbers are handled).
+repo:
+  name: "acme-scheduler"
+  create: false
+
+# Project board configuration.
+project:
+  name: "Acme Scheduler -- Service Onboarding"
+  description: >-
+    Operational readiness tracking for Acme Scheduler.
+    Instantiated from Application Service Onboarding template v1 on {DATE}.
+
+# Skip M2 because Acme Scheduler is already deployed.
+# All issues belonging to M2 (template_ids 005, 006, 007) are automatically
+# excluded. Cross-references to those issues in other bodies will be
+# replaced with strikethrough text in Phase 5.
+skip_milestones:
+  - M2
+
+# Skip individual issues by template_id (independent of milestone skipping).
+skip_issues: []
+
+# Override field values for specific issues.
+# Key: template_id (string). Value: {field_id: option_value}.
+# Validation: field_id and option_value must exist in the template.
+field_overrides: {}
+  # Example -- mark a specific issue as higher priority:
+  # "017":
+  #   priority: "P2 -- Important"
+
+# Project start date for milestone due date calculation.
+# Format: YYYY-MM-DD. Milestone due dates = start_date + due_offset_weeks.
+start_date: "2026-05-01"
+
+# Pruning decision (only needed when template defines pruning rules).
+# Key: decision_field from the pruning block. Value: one of the field_values.
+# pruning_decision:
+#   deployment_type: "existing-service"

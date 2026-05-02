@@ -1,0 +1,724 @@
+# example-template.yaml
+# Reference template demonstrating all plynth schema features.
+# Domain: Application Service Onboarding -- track the operational readiness
+# lifecycle of a new managed service from first commit to steady-state operations.
+#
+# Features demonstrated:
+#   - Placeholders (APP, PREFIX, TEAM) used in titles, bodies, and field options
+#   - Optional milestone (M2 -- skip when service is already deployed)
+#   - Cross-milestone blocked_by / blocks dependency chains
+#   - {PREFIX}-### cross-references in body text (resolved in Phase 5)
+#   - Pruning rules (commented out -- shows pattern for conditional issue sets)
+#   - Views section (declarative documentation; not automated by engine v1)
+---
+schema_version: "1.0"
+
+template:
+  name: "Application Service Onboarding"
+  description: >-
+    Golden-path template for onboarding a new managed service to the
+    platform team's operational standards. Covers repository setup,
+    deployment, observability, security, and automation milestones.
+  version: "v1"
+
+# ─── Placeholders ────────────────────────────────────────────────────────────
+# Every key here must be supplied in the instance config.
+# The engine validates placeholder coverage before creating anything.
+placeholders:
+  APP:
+    description: "Application or service name"
+    example: "Acme Scheduler"
+    required: true
+  PREFIX:
+    description: "2-4 character issue prefix used in titles and cross-references"
+    example: "ACME"
+    required: true
+  TEAM:
+    description: "Owning team name"
+    example: "Platform Engineering"
+    required: true
+
+# ─── Status Field ────────────────────────────────────────────────────────────
+# Customizes the built-in Status field on the project board.
+# Option order is preserved (rendered left-to-right on the board).
+status:
+  - value: "Backlog"
+    color: "GRAY"
+  - value: "Ready"
+    color: "BLUE"
+  - value: "In Progress"
+    color: "YELLOW"
+  - value: "Blocked"
+    color: "RED"
+  - value: "In Review"
+    color: "PURPLE"
+  - value: "Done"
+    color: "GREEN"
+
+# ─── Custom Fields ────────────────────────────────────────────────────────────
+# Each field becomes a ProjectV2 SingleSelectField.
+# Placeholders in option values are resolved at instantiation time.
+fields:
+  - id: workstream
+    name: "Workstream"
+    type: single_select
+    options:
+      - "Documentation"
+      - "Infrastructure"
+      - "Operations"
+      - "Security"
+      - "Integration"
+
+  - id: phase
+    name: "Phase"
+    type: single_select
+    options:
+      - "Setup"
+      - "Configuration"
+      - "Validation"
+      - "Operations"
+
+  - id: priority
+    name: "Priority"
+    type: single_select
+    options:
+      - "P1 -- Critical Path"
+      - "P2 -- Important"
+      - "P3 -- When Capacity Allows"
+
+  - id: owner
+    name: "Owner"
+    type: single_select
+    options:
+      # {TEAM} is resolved to the team name from the instance config.
+      - "{TEAM}"
+      - "Platform"
+      - "External"
+      - "Shared"
+
+# ─── Milestones ──────────────────────────────────────────────────────────────
+# Created as repository milestones via REST (POST /repos/{org}/{repo}/milestones).
+# due_date is calculated as: instance.start_date + due_offset_weeks.
+# optional: true means the milestone (and all its issues) may be skipped
+#   via skip_milestones in the instance config.
+milestones:
+  - id: M1
+    title: "M1: Repository and Documentation Foundation"
+    description: >-
+      Repository, documentation site, and service catalog registration.
+      No external dependencies. Scaffolding for every subsequent milestone.
+    due_offset_weeks: 3
+    optional: false
+
+  - id: M2
+    title: "M2: Deployment and Configuration"
+    description: >-
+      Initial deployment or refresh of {APP} in the target environment.
+      Skip this milestone if the service is already running in production
+      and no infrastructure change is planned.
+    due_offset_weeks: 6
+    optional: true
+
+  - id: M3
+    title: "M3: Observability and Operations"
+    description: >-
+      Monitoring, alerting, runbook, and on-call coverage.
+      Depends on M2 if the service was freshly deployed.
+    due_offset_weeks: 9
+    optional: false
+
+  - id: M4
+    title: "M4: Security and Compliance"
+    description: >-
+      Security assessment, access controls, and backup/recovery validation.
+    due_offset_weeks: 13
+    optional: false
+
+  - id: M5
+    title: "M5: Automation and Integration"
+    description: >-
+      Automated compliance checks, external integrations, and final
+      operating model documentation.
+    due_offset_weeks: 17
+    optional: false
+
+# ─── Issues ──────────────────────────────────────────────────────────────────
+# template_id: unique within this template; used for blocked_by/blocks and
+#   cross-reference resolution. Zero-padded 3-digit string.
+#
+# blocked_by / blocks: list of template_ids.
+#   blocked_by: ["003"] means this issue cannot start until 003 is complete.
+#   blocks: ["007"] means this issue must complete before 007 can start.
+#   Both directions collapse to addBlockedBy(issueId, blockingIssueId) in Phase 5.
+#
+# {PREFIX}-### patterns in body text are replaced with #real_number in Phase 5.
+#   Use these for clickable cross-references in GitHub issue bodies.
+#   These patterns are intentionally left unresolved until all issues exist.
+issues:
+
+  # ── M1: Repository and Documentation Foundation ──────────────────────────
+
+  - template_id: "001"
+    title: "{PREFIX}-001: Create {APP} repository"
+    milestone_id: M1
+    fields:
+      workstream: "Documentation"
+      phase: "Setup"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: []
+    blocks: ["002", "003", "006", "012"]
+    body: |
+      Create the canonical repository for {APP}. Apply standard repository
+      configuration: branch protections, CODEOWNERS, and base documentation structure.
+
+      **Dependencies:**
+      - Blocked by: None (starting issue)
+      - Blocks: {PREFIX}-002 (branch protection), {PREFIX}-003 (doc site),
+        {PREFIX}-006 (deployment), {PREFIX}-012 (security assessment)
+
+      Acceptance criteria:
+      - Repository created and accessible to the team
+      - Branch protection rules enabled: require PR review, status checks pass
+      - CODEOWNERS file reflects team ownership
+      - README with project overview, links to documentation, and on-call contact
+
+  - template_id: "002"
+    title: "{PREFIX}-002: Configure branch protection and CODEOWNERS"
+    milestone_id: M1
+    fields:
+      workstream: "Documentation"
+      phase: "Setup"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: ["001"]
+    blocks: []
+    body: |
+      Apply and verify branch protection rules on the main branch.
+      Ensure CODEOWNERS routes reviews to the correct team members.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-001 (repository must exist)
+      - Blocks: None
+
+      Acceptance criteria:
+      - Require pull request reviews before merging: enabled
+      - Require status checks to pass: enabled
+      - Restrict direct pushes to main: enabled
+      - CODEOWNERS: verified with a test PR review request
+      - Branch protection settings documented in repository README
+
+  - template_id: "003"
+    title: "{PREFIX}-003: Publish documentation site for {APP}"
+    milestone_id: M1
+    fields:
+      workstream: "Documentation"
+      phase: "Setup"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: ["001"]
+    blocks: ["009"]
+    body: |
+      Stand up the documentation site. This becomes the single authoritative
+      reference for {APP} operations, runbooks, architecture, and history.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-001 (repository must exist)
+      - Blocks: {PREFIX}-009 (runbook needs the doc site)
+
+      Required sections:
+      - Overview: purpose, owners, links to related systems
+      - Architecture: component diagram, external dependencies, data flow
+      - Deployment: how to build and deploy, configuration variables
+      - Operations: day-to-day tasks, common issues, escalation path
+      - Runbooks: per-incident procedures
+      - On-call: rotation, escalation levels, contact list
+
+      Acceptance criteria:
+      - Site published and accessible to the team
+      - Nav structure in place (empty sections are fine)
+      - Link from repository README to doc site
+
+  - template_id: "004"
+    title: "{PREFIX}-004: Register {APP} in the service catalog"
+    milestone_id: M1
+    fields:
+      workstream: "Operations"
+      phase: "Setup"
+      priority: "P2 -- Important"
+      owner: "{TEAM}"
+    blocked_by: []
+    blocks: []
+    body: |
+      Create the service catalog entry for {APP}. A catalog record enables
+      discoverability, ownership tracking, and integration with dependency
+      analysis tooling.
+
+      **Dependencies:**
+      - Blocked by: None (can proceed in parallel with {PREFIX}-001)
+      - Blocks: None
+
+      Fields to populate:
+      - Service name and description
+      - Owning team: {TEAM}
+      - Repository URL (fill in after {PREFIX}-001)
+      - Data classification and business criticality
+      - On-call contact and escalation path
+      - SLA and recovery objectives (if defined)
+      - External dependencies (upstream services, data sources)
+
+      Acceptance criteria:
+      - Catalog entry created and marked active
+      - All required fields populated
+      - Entry linked from repository README
+
+  # ── M2: Deployment and Configuration (OPTIONAL) ──────────────────────────
+  # Skip this milestone via instance config if {APP} is already deployed.
+  # All M2 issues are automatically skipped when the milestone is skipped.
+  # Cross-references to M2 issues in M3+ bodies will be struck through.
+
+  - template_id: "005"
+    title: "{PREFIX}-005: Provision target environment resources"
+    milestone_id: M2
+    fields:
+      workstream: "Infrastructure"
+      phase: "Setup"
+      priority: "P1 -- Critical Path"
+      owner: "Platform"
+    blocked_by: []
+    blocks: ["006"]
+    body: |
+      Provision the compute, storage, and networking resources required
+      to run {APP} in the target environment.
+
+      **Dependencies:**
+      - Blocked by: None
+      - Blocks: {PREFIX}-006 (cannot deploy without resources)
+
+      Resources to provision:
+      - Compute: determine sizing from service requirements + monitoring overhead
+      - Storage: persistent volumes or object storage as required
+      - Network: firewall rules, ingress configuration, egress requirements
+      - Credentials: service accounts, secrets management entries
+
+      Acceptance criteria:
+      - All resources provisioned and accessible
+      - Resource specifications documented in the repository
+      - Credentials stored in the approved secrets management system
+      - Provisioning steps documented for repeatability
+
+  - template_id: "006"
+    title: "{PREFIX}-006: Deploy {APP} to target environment"
+    milestone_id: M2
+    fields:
+      workstream: "Infrastructure"
+      phase: "Configuration"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: ["001", "005"]
+    blocks: ["007", "008", "009"]
+    body: |
+      Deploy {APP} to the target environment. Document every step
+      during the deployment -- this record becomes the rebuild runbook.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-001 (repository needed), {PREFIX}-005 (resources provisioned)
+      - Blocks: {PREFIX}-007 (validation needs a running instance),
+        {PREFIX}-008 (monitoring needs a running service),
+        {PREFIX}-009 (runbook needs deployment details)
+
+      Acceptance criteria:
+      - {APP} deployed and running in target environment
+      - All health checks passing
+      - Configuration documented in the repository (no undocumented manual steps)
+      - Deployment steps documented on doc site (Build/Deploy section)
+      - Network connectivity validated: ingress, egress, upstream dependencies
+
+  - template_id: "007"
+    title: "{PREFIX}-007: Validate deployment and update runbook"
+    milestone_id: M2
+    fields:
+      workstream: "Operations"
+      phase: "Validation"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: ["006"]
+    blocks: []
+    body: |
+      Verify the deployment meets functional and non-functional requirements.
+      Update the deployment runbook with any corrections discovered during validation.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-006 (instance must be running)
+      - Blocks: None (terminal in M2)
+
+      Acceptance criteria:
+      - Functional smoke test passed: all critical user journeys work
+      - Rollback procedure tested and documented
+      - Deployment runbook updated with corrections from this validation
+      - Known issues and workarounds documented
+
+  # ── M3: Observability and Operations ─────────────────────────────────────
+
+  - template_id: "008"
+    title: "{PREFIX}-008: Configure monitoring, dashboards, and alerting"
+    milestone_id: M3
+    fields:
+      workstream: "Operations"
+      phase: "Configuration"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: ["006"]
+    blocks: ["010", "011"]
+    body: |
+      Set up metrics collection, a service health dashboard, and alerting rules
+      for {APP}. Blocked by {PREFIX}-006 when M2 is included; if M2 is skipped
+      (service already deployed), this issue is unblocked.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-006 (service must be running) [M2 only]
+      - Blocks: {PREFIX}-010 (on-call needs alerting), {PREFIX}-011 (review needs dashboards)
+
+      Acceptance criteria:
+      - Key metrics identified and being collected (latency, error rate, saturation, traffic)
+      - Service health dashboard created and linked from doc site
+      - Alerting rules configured for critical conditions
+      - Alert routing verified: alerts reach on-call engineer
+      - Runbook link attached to each alert
+
+  - template_id: "009"
+    title: "{PREFIX}-009: Write operational runbook for {APP}"
+    milestone_id: M3
+    fields:
+      workstream: "Documentation"
+      phase: "Operations"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: ["003", "006"]
+    blocks: ["010", "011"]
+    body: |
+      Write the operational runbook for {APP}: how to deploy, scale, restart,
+      investigate incidents, and escalate. Publish on the doc site.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-003 (doc site must exist), {PREFIX}-006 (deployment details) [M2 only]
+      - Blocks: {PREFIX}-010 (on-call needs a runbook), {PREFIX}-011 (review needs runbook)
+
+      Required runbook sections:
+      - Service overview: what it does, what breaks if it goes down
+      - Deployment procedure and rollback steps
+      - Common failure modes and remediation steps
+      - Escalation path: who to page and when
+      - Dependencies and upstream contact information
+
+      Acceptance criteria:
+      - Runbook published on doc site under Operations > Runbooks
+      - Reviewed by at least one team member not involved in writing it
+      - Link from repository README and from each monitoring alert
+
+  - template_id: "010"
+    title: "{PREFIX}-010: Set up on-call rotation and escalation paths"
+    milestone_id: M3
+    fields:
+      workstream: "Operations"
+      phase: "Operations"
+      priority: "P2 -- Important"
+      owner: "{TEAM}"
+    blocked_by: ["008", "009"]
+    blocks: ["011"]
+    body: |
+      Add {APP} to the on-call rotation. Define escalation levels and
+      ensure alert routing reaches the correct people.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-008 (alerts must be configured), {PREFIX}-009 (runbook must exist)
+      - Blocks: {PREFIX}-011 (operational review needs on-call coverage)
+
+      Acceptance criteria:
+      - {APP} added to on-call schedule
+      - Escalation path defined: L1 → L2 → engineering lead
+      - On-call contacts listed in service catalog ({PREFIX}-004)
+      - Test alert sent and received by on-call engineer
+      - Rotation schedule documented in doc site Operations section
+
+  - template_id: "011"
+    title: "{PREFIX}-011: Conduct first operational readiness review"
+    milestone_id: M3
+    fields:
+      workstream: "Operations"
+      phase: "Validation"
+      priority: "P2 -- Important"
+      owner: "{TEAM}"
+    blocked_by: ["008", "009", "010"]
+    blocks: []
+    body: |
+      Structured review to confirm {APP} is ready for steady-state operations.
+      Walk through all M3 acceptance criteria with the team.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-008 (monitoring), {PREFIX}-009 (runbook), {PREFIX}-010 (on-call)
+      - Blocks: None (terminal in M3)
+
+      Review checklist:
+      - Monitoring dashboard is live and covering key signals
+      - Alerting rules are active and routing correctly
+      - Runbook is published, reviewed, and accurate
+      - On-call rotation is in place with verified escalation path
+      - Service catalog record ({PREFIX}-004) is up to date
+      - Known issues and deferred work are tracked
+
+      Acceptance criteria:
+      - Review meeting completed with attendance documented
+      - Any gaps found during review are tracked as follow-up issues
+      - M3 signed off by {TEAM} team lead
+
+  # ── M4: Security and Compliance ──────────────────────────────────────────
+
+  - template_id: "012"
+    title: "{PREFIX}-012: Conduct security assessment for {APP}"
+    milestone_id: M4
+    fields:
+      workstream: "Security"
+      phase: "Validation"
+      priority: "P1 -- Critical Path"
+      owner: "External"
+    blocked_by: ["001"]
+    blocks: ["013", "016"]
+    body: |
+      Formal security assessment of {APP}: threat model, dependency audit,
+      and configuration review. Findings drive {PREFIX}-013 (access controls)
+      and {PREFIX}-016 (automated compliance checks).
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-001 (repository must exist to assess)
+      - Blocks: {PREFIX}-013 (controls implement assessment findings),
+        {PREFIX}-016 (compliance checks encode assessment conclusions)
+
+      Assessment scope:
+      - Threat model: identify trust boundaries, data flows, and attack surfaces
+      - Dependency audit: known vulnerabilities in direct and transitive dependencies
+      - Configuration review: secrets handling, authentication, authorization
+      - Network exposure: ingress surface, egress requirements, unnecessary permissions
+      - Data handling: classification, encryption at rest/in transit, retention
+
+      Acceptance criteria:
+      - Threat model documented and reviewed
+      - Dependency vulnerabilities triaged with risk decisions recorded
+      - Configuration findings addressed or accepted with rationale
+      - Assessment results stored per security evidence requirements
+
+  - template_id: "013"
+    title: "{PREFIX}-013: Implement access controls and least-privilege RBAC"
+    milestone_id: M4
+    fields:
+      workstream: "Security"
+      phase: "Configuration"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: ["012"]
+    blocks: ["015"]
+    body: |
+      Implement access controls that address findings from {PREFIX}-012.
+      Apply least-privilege: each role or service account has only the
+      permissions required for its function.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-012 (assessment drives the control requirements)
+      - Blocks: {PREFIX}-015 (final operating model documents the access model)
+
+      Acceptance criteria:
+      - Service accounts and roles created with least-privilege permissions
+      - Human access requires approval and is time-limited where appropriate
+      - Access matrix documented in doc site Security section
+      - No hardcoded credentials anywhere in the codebase or configuration
+
+  - template_id: "014"
+    title: "{PREFIX}-014: Validate backup and recovery procedure"
+    milestone_id: M4
+    fields:
+      workstream: "Operations"
+      phase: "Validation"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: []
+    blocks: ["015"]
+    body: |
+      Define, document, and test the backup and recovery procedure for {APP}.
+      Confirm that recovery objectives are achievable and understood by the team.
+
+      **Dependencies:**
+      - Blocked by: None (can proceed in parallel with security assessment)
+      - Blocks: {PREFIX}-015 (final operating model includes recovery objectives)
+
+      Procedure to document:
+      - What state needs to be backed up (data, configuration, secrets)
+      - Backup method, schedule, and retention period
+      - Recovery steps: restore to a known-good state from backup
+      - RTO and RPO targets, agreed with service owner
+
+      Acceptance criteria:
+      - Backup procedure documented in doc site Operations section
+      - Recovery test completed successfully
+      - RTO/RPO targets documented and agreed with stakeholders
+      - Periodic recovery test schedule established (at minimum quarterly)
+
+  # ── M5: Automation and Integration ───────────────────────────────────────
+
+  - template_id: "015"
+    title: "{PREFIX}-015: Document final operating model for {APP}"
+    milestone_id: M5
+    fields:
+      workstream: "Documentation"
+      phase: "Operations"
+      priority: "P1 -- Critical Path"
+      owner: "{TEAM}"
+    blocked_by: ["013", "014"]
+    blocks: []
+    body: |
+      Consolidate the operating model for {APP}: ownership, SLAs, recovery
+      objectives, change process, and team responsibilities. This is the
+      steady-state reference document.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-013 (access controls finalized),
+        {PREFIX}-014 (recovery objectives confirmed)
+      - Blocks: None (terminal issue)
+
+      Operating model sections:
+      - Service ownership and team contacts
+      - SLA and recovery objectives (RTO/RPO from {PREFIX}-014)
+      - Change and deployment process
+      - Access model (summary from {PREFIX}-013)
+      - External dependencies and their SLAs
+      - Escalation path (link to on-call rotation from {PREFIX}-010)
+      - Deferred work and known limitations
+
+      Acceptance criteria:
+      - Operating model document published on doc site
+      - Reviewed and approved by {TEAM} lead and stakeholders
+      - Service catalog ({PREFIX}-004) updated with link and SLA
+
+  - template_id: "016"
+    title: "{PREFIX}-016: Automate compliance and security checks"
+    milestone_id: M5
+    fields:
+      workstream: "Security"
+      phase: "Operations"
+      priority: "P2 -- Important"
+      owner: "{TEAM}"
+    blocked_by: ["012"]
+    blocks: []
+    body: |
+      Encode the security baseline from {PREFIX}-012 as automated checks
+      that run on a schedule. Failures should alert the on-call engineer.
+
+      **Dependencies:**
+      - Blocked by: {PREFIX}-012 (security assessment defines what to check)
+      - Blocks: None
+
+      Checks to automate:
+      - Dependency vulnerability scan (direct and transitive dependencies)
+      - Configuration drift detection (compare live configuration to documented baseline)
+      - Secrets exposure check (scan repository for accidentally committed credentials)
+      - Scheduled runs: daily for vulnerability scans, weekly for configuration drift
+
+      Acceptance criteria:
+      - Automated checks running on schedule
+      - Results stored as artifacts per evidence requirements
+      - Failures trigger alerts to on-call via {PREFIX}-010 routing
+      - Check scripts committed to repository and documented
+
+  - template_id: "017"
+    title: "{PREFIX}-017: Evaluate and implement external integrations"
+    milestone_id: M5
+    fields:
+      workstream: "Integration"
+      phase: "Operations"
+      priority: "P3 -- When Capacity Allows"
+      owner: "{TEAM}"
+    blocked_by: []
+    blocks: []
+    body: |
+      Assess which external integrations add operational value for {APP}:
+      service mesh observability, event-driven notifications, API gateway
+      registration, or data pipeline connections.
+
+      **Dependencies:**
+      - Blocked by: None (evaluation can begin at any point)
+      - Blocks: None (outcome determines future investment)
+
+      Evaluation questions:
+      - What data does {APP} expose that other services could consume?
+      - What data does {APP} need from other services?
+      - Which integrations are required vs. optional for the current use case?
+      - What is the maintenance overhead of each integration?
+
+      Acceptance criteria:
+      - Integration evaluation documented with proceed / defer / not applicable decisions
+      - Implemented integrations have dedicated runbook entries
+      - Non-implemented integrations have rationale recorded for future reference
+
+# ─── Views ────────────────────────────────────────────────────────────────────
+# View definitions are declarative documentation only.
+# GHES 3.19 does not expose createProjectV2View mutations.
+# Views must be configured manually after project creation (5-10 minutes).
+views:
+  - name: "Board"
+    layout: board
+    group_by: status
+    filter: null
+    sort: null
+    visible_fields: ["workstream", "phase", "priority", "owner"]
+    description: "Sprint planning and day-to-day tracking."
+
+  - name: "Table"
+    layout: table
+    group_by: workstream
+    sort:
+      field: priority
+      direction: asc
+    filter: null
+    visible_fields: ["phase", "priority", "owner"]
+    description: "Stakeholder updates and workstream progress."
+
+  - name: "Roadmap"
+    layout: roadmap
+    group_by: milestone
+    slice_by: owner
+    filter: null
+    visible_fields: ["priority"]
+    description: "Timeline planning and external dependency visibility."
+
+  - name: "Security"
+    layout: table
+    group_by: phase
+    filter:
+      field: workstream
+      operator: "is"
+      value: "Security"
+    sort: null
+    visible_fields: ["priority", "owner"]
+    description: "Security and compliance work tracking."
+
+# ─── Pruning Rules (schema example -- not active in this template) ────────────
+# Pruning rules allow conditional issue inclusion based on a field value
+# set after a decision point. Uncomment and adapt to use this feature.
+#
+# Example: onboarding an existing service vs. a net-new service
+# requires different sets of issues in M2.
+#
+# pruning:
+#   trigger_issue: "004"           # After this issue closes...
+#   decision_field: deployment_type # ...this field is set on all issues
+#   rules:
+#     - field_value: "new-deployment"
+#       keep_issues: ["005", "006", "007"]
+#       remove_issues: []
+#     - field_value: "existing-service"
+#       keep_issues: []
+#       remove_issues: ["005", "006", "007"]
+#
+# When pruning_decision.deployment_type is set in the instance config, the
+# planner applies the matching rule during plan computation (before any API
+# calls). If not set, all issues are included and pruning can be applied
+# after the decision is made by running the engine with the decision set.
