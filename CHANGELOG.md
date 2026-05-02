@@ -10,6 +10,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **PyPI Trusted Publishing** (`.github/workflows/release.yml`) on `v*` tags.
+  Builds sdist + wheel, publishes to PyPI via OIDC (no API token in repo
+  secrets), and creates a matching GitHub Release with the artifacts
+  attached. `pipx install plynth` is now the recommended install path.
 - **`target` config field** (`plynth/models/instance.py`) replacing `ghes_url`.
   Accepts `""`, `"github.com"`, or `"https://api.github.com"` for GitHub.com,
   and `"https://<host>"` for GHES. `https://github.com` (the web host),

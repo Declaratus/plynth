@@ -15,6 +15,16 @@ A Python CLI tool that bootstraps fully populated GitHub Projects from declarati
 
 plynth replaces a manual 30-60 minute process of copying project templates, converting draft issues to real issues, assigning milestones, replacing placeholder tokens, and wiring cross-reference dependencies. It reads a **template definition** (YAML) and an **instance config** (YAML), then orchestrates GraphQL/REST mutations to produce a project with real issues, milestones assigned, placeholders resolved, field values set, and dependency relationships wired.
 
+## Install
+
+```bash
+pipx install plynth        # recommended for use as a CLI
+pip install plynth         # for use as a library / one-shot
+```
+
+Releases are published from this repo to PyPI on every `v*` tag; GitHub
+Releases include the matching wheel + sdist.
+
 ## Configuration: target
 
 Set `target` in your instance YAML to point plynth at GitHub.com or a GHES
