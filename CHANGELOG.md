@@ -52,13 +52,10 @@ with request timeouts, and CI.
 - `request_timeout_s` parameter on `GHESClient`, threaded through every
   `session.post` in `engine.graphql_client` and `engine.rest_client`.
 - Friendly error mapping:
-  - HTTP 401 → `AuthError("Token rejected by {ghes_url}; verify GHES_TOKEN
-    scopes include 'repo' and 'project'.")`
-  - REST 404 → `NotFoundError("Repository {owner}/{repo} not found on
-    {ghes_url}")`
+  - HTTP 401 → `AuthError` ("Token rejected by `{ghes_url}`; verify GHES_TOKEN scopes include `repo` and `project`.")
+  - REST 404 → `NotFoundError` ("Repository `{owner}/{repo}` not found on `{ghes_url}`")
   - GraphQL "Could not resolve to ..." / "could not be found" → `NotFoundError`
-  - `requests.Timeout` / `ConnectionError` → `NetworkError` (with the
-    configured timeout in the message)
+  - `requests.Timeout` / `ConnectionError` → `NetworkError` (with the configured timeout in the message)
 - `cli.main` wraps dispatch in `try/except PlynthError` → prints
   `Error: {e}` to stderr and exits with code 2. Unexpected exceptions still
   raise so tracebacks aren't hidden in `--verbose`.
