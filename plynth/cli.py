@@ -29,7 +29,8 @@ from plynth.models.state import (
 from plynth.models.template import TemplateDefinition
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the plynth argparse parser. Exposed for test reuse."""
     parser = argparse.ArgumentParser(
         prog="plynth",
         description=("GitHub Projects as Code -- bootstrap GitHub Projects from YAML templates."),
@@ -63,6 +64,11 @@ def main() -> None:
     resolve_parser.add_argument("--token", help="GHES PAT (or set GHES_TOKEN env var)")
     resolve_parser.add_argument("-v", "--verbose", action="store_true")
 
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
 
     # Configure logging

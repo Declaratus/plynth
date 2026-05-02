@@ -26,9 +26,11 @@ def test_longest_first_avoids_partial_match() -> None:
     # {PREFIX}-1 must not greedily consume {PREFIX}-100.
     body = "{PREFIX}-100 and {PREFIX}-1"
     out = resolve_crossrefs(body, {"{PREFIX}-1": "#1", "{PREFIX}-100": "#100"})
-    assert "#100" in out
-    assert "#1" in out
-    assert "{PREFIX}-100" not in out
+    # Exact match: both refs must be resolved independently with no leftover
+    # {PREFIX}-… text. A weak `"#1" in out` would pass even if only #100
+    # were present (since "#1" is a substring of "#100"), so assert exact equality.
+    assert out == "#100 and #1"
+    assert "{PREFIX}" not in out
 
 
 def test_empty_maps_no_change() -> None:
