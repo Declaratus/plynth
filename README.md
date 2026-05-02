@@ -238,5 +238,13 @@ Build in this order. Each step should be testable independently.
 
 ## Roadmap
 
-- v0.3.0 (in flight): github.com support via `target`, PyPI trusted publishing.
-- Post-0.3: drift detection, GitHub Action wrapper, additional backends.
+Active work and milestones: <https://github.com/Declaratus/plynth/milestones>
+
+Browse open issues by area:
+
+- [Features](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22type%3Afeature%22)
+- [Good first issues](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22good-first-issue%22)
+- [Help wanted](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22help-wanted%22)
+
+Recent themes: github.com support and PyPI publishing (v0.3.0); drift
+detection, JSON dry-run output, and a GitHub Action wrapper (post-0.3).
