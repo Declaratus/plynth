@@ -8,6 +8,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.3.0] — 2026-05-02
+
+github.com support, PyPI trusted publishing, and roadmap visibility.
+
 ### Added
 
 - **PyPI Trusted Publishing** (`.github/workflows/release.yml`) on `v*` tags.
@@ -151,6 +157,7 @@ Initial release. Core engine complete and functional against GHES 3.19.
   planner spec, API client spec, example template (17 issues, 5 milestones),
   and example instance config.
 
-[Unreleased]: https://github.com/Declaratus/plynth/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Declaratus/plynth/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Declaratus/plynth/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Declaratus/plynth/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Declaratus/plynth/releases/tag/v0.1.0
