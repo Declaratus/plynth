@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import requests
 
-from plynth.engine.api_base import GHESClient
+from plynth.engine.api_base import GitHubClient
 from plynth.errors import AuthError, NetworkError, NotFoundError
 
 
 class RESTClient:
-    """REST client for GHES operations not available in GraphQL."""
+    """REST client for GitHub operations not available in GraphQL."""
 
-    def __init__(self, base: GHESClient) -> None:
+    def __init__(self, base: GitHubClient) -> None:
         self.base = base
 
     def create_milestone(
@@ -28,7 +28,7 @@ class RESTClient:
         """
         self.base._wait_for_write_delay()
 
-        url = f"{self.base.ghes_url}/api/v3/repos/{owner}/{repo}/milestones"
+        url = f"{self.base.rest_base}/repos/{owner}/{repo}/milestones"
         payload: dict = {"title": title, "description": description}
         if due_on:
             payload["due_on"] = due_on
@@ -43,7 +43,7 @@ class RESTClient:
                     f"REST request to {url} timed out after {self.base.request_timeout_s}s"
                 ) from e
             except requests.ConnectionError as e:
-                raise NetworkError(f"Could not connect to {self.base.ghes_url}: {e}") from e
+                raise NetworkError(f"Could not connect to {self.base.display_target}: {e}") from e
 
             if response.ok:
                 self.base._record_write()
@@ -56,11 +56,13 @@ class RESTClient:
 
             if response.status_code == 401:
                 raise AuthError(
-                    f"Token rejected by {self.base.ghes_url}; verify GHES_TOKEN "
+                    f"Token rejected by {self.base.display_target}; verify PLYNTH_TOKEN "
                     f"scopes include `repo` and `project`."
                 )
             if response.status_code == 404:
-                raise NotFoundError(f"Repository {owner}/{repo} not found on {self.base.ghes_url}")
+                raise NotFoundError(
+                    f"Repository {owner}/{repo} not found on {self.base.display_target}"
+                )
 
             if not self.base._handle_retry(response, attempt):
                 response.raise_for_status()

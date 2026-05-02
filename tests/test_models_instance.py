@@ -9,7 +9,7 @@ from plynth.models.instance import InstanceConfig
 def _base_instance_dict() -> dict:
     return {
         "template": "t.yaml",
-        "ghes_url": "https://ghes.example.com",
+        "target": "https://ghes.example.com",
         "org": "example-org",
         "values": {"APP": "Acme"},
         "repo": {"name": "acme"},
@@ -17,18 +17,73 @@ def _base_instance_dict() -> dict:
     }
 
 
-def test_ghes_url_trailing_slash_stripped() -> None:
+def test_target_trailing_slash_stripped() -> None:
     data = _base_instance_dict()
-    data["ghes_url"] = "https://ghes.example.com/"
+    data["target"] = "https://ghes.example.com/"
     cfg = InstanceConfig.model_validate(data)
-    assert cfg.ghes_url == "https://ghes.example.com"
+    assert cfg.target == "https://ghes.example.com"
 
 
-def test_ghes_url_multi_trailing_slash_stripped() -> None:
+def test_target_multi_trailing_slash_stripped() -> None:
     data = _base_instance_dict()
-    data["ghes_url"] = "https://ghes.example.com///"
+    data["target"] = "https://ghes.example.com///"
     cfg = InstanceConfig.model_validate(data)
-    assert cfg.ghes_url == "https://ghes.example.com"
+    assert cfg.target == "https://ghes.example.com"
+
+
+def test_target_github_com_accepted() -> None:
+    data = _base_instance_dict()
+    data["target"] = "github.com"
+    cfg = InstanceConfig.model_validate(data)
+    assert cfg.target == "github.com"
+
+
+def test_target_empty_accepted_as_github_com_default() -> None:
+    data = _base_instance_dict()
+    data["target"] = ""
+    cfg = InstanceConfig.model_validate(data)
+    assert cfg.target == ""
+
+
+def test_target_https_api_github_com_accepted() -> None:
+    data = _base_instance_dict()
+    data["target"] = "https://api.github.com"
+    cfg = InstanceConfig.model_validate(data)
+    assert cfg.target == "https://api.github.com"
+
+
+def test_target_https_github_com_rejected_with_fix_it() -> None:
+    """https://github.com is the web host, not the API. Don't auto-correct it."""
+    data = _base_instance_dict()
+    data["target"] = "https://github.com"
+    with pytest.raises(ValidationError, match="api.github.com"):
+        InstanceConfig.model_validate(data)
+
+
+def test_target_http_rejected() -> None:
+    data = _base_instance_dict()
+    data["target"] = "http://ghes.example.com"
+    with pytest.raises(ValidationError, match="only https"):
+        InstanceConfig.model_validate(data)
+
+
+def test_target_bare_hostname_rejected() -> None:
+    data = _base_instance_dict()
+    data["target"] = "ghes.example.com"
+    with pytest.raises(ValidationError, match="https"):
+        InstanceConfig.model_validate(data)
+
+
+def test_legacy_ghes_url_key_rejected_with_migration_hint() -> None:
+    """A v0.2.0 instance file using `ghes_url:` should fail loudly with a hint."""
+    data = _base_instance_dict()
+    data.pop("target")
+    data["ghes_url"] = "https://ghes.example.com"
+    with pytest.raises(ValidationError) as exc_info:
+        InstanceConfig.model_validate(data)
+    msg = str(exc_info.value)
+    assert "target" in msg
+    assert "0.3.0" in msg
 
 
 def test_start_date_valid_iso() -> None:

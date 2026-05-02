@@ -5,7 +5,7 @@
 plynth requires a GitHub Personal Access Token (PAT) with `repo` and `project` scopes.
 
 **Do:**
-- Pass the token via the `GHES_TOKEN` environment variable.
+- Pass the token via the `PLYNTH_TOKEN` environment variable.
 - Use `--token` for one-off invocations where environment variables are inconvenient.
 - Store tokens in a secrets management system, not in files on disk.
 - Rotate tokens regularly and revoke unused ones.
@@ -15,8 +15,11 @@ plynth requires a GitHub Personal Access Token (PAT) with `repo` and `project` s
 - Log tokens or include them in bug reports.
 - Set tokens in shell history. To avoid this, use:
   ```bash
-  read -rs GHES_TOKEN && export GHES_TOKEN
+  read -rs PLYNTH_TOKEN && export PLYNTH_TOKEN
   ```
+
+> **Note:** `GHES_TOKEN` is accepted for one release as a deprecated fallback
+> and will be removed in v0.4.0.
 
 Instance config files (`*.yaml`) intentionally have no `token` field.
 The token is always supplied at runtime, never stored in YAML.

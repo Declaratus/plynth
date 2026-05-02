@@ -6,7 +6,7 @@ import pytest
 import requests
 import responses
 
-from plynth.engine.api_base import GHESClient
+from plynth.engine.api_base import GitHubClient
 from plynth.engine.rest_client import RESTClient
 
 GHES_URL = "https://ghes.example.com"
@@ -14,7 +14,7 @@ MILESTONE_URL = f"{GHES_URL}/api/v3/repos/example-org/acme/milestones"
 
 
 def _client() -> RESTClient:
-    base = GHESClient(GHES_URL, "tok", write_delay_ms=0)
+    base = GitHubClient(GHES_URL, "tok", write_delay_ms=0)
     return RESTClient(base)
 
 

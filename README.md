@@ -15,7 +15,19 @@ A Python CLI tool that bootstraps fully populated GitHub Projects from declarati
 
 plynth replaces a manual 30-60 minute process of copying project templates, converting draft issues to real issues, assigning milestones, replacing placeholder tokens, and wiring cross-reference dependencies. It reads a **template definition** (YAML) and an **instance config** (YAML), then orchestrates GraphQL/REST mutations to produce a project with real issues, milestones assigned, placeholders resolved, field values set, and dependency relationships wired.
 
-> **Status:** the initial implementation was developed against GHES 3.19 conventions (`/api/graphql`, `/api/v3/...`). github.com URL handling is the immediate next step; the GraphQL operations themselves are common to both.
+## Configuration: target
+
+Set `target` in your instance YAML to point plynth at GitHub.com or a GHES
+host:
+
+```yaml
+target: github.com                       # or omit for the same default
+target: https://api.github.com           # equivalent
+target: https://ghes.example.com         # GHES — REST under /api/v3
+```
+
+Authenticate with `PLYNTH_TOKEN=ghp_...` (or `--token`). `GHES_TOKEN` is
+accepted for one release with a deprecation warning.
 
 ## Technology stack
 
@@ -214,7 +226,7 @@ Build in this order. Each step should be testable independently.
 6. **CLI** (`cli.py`)
    - `plynth create --template <path> --instance <path> [--dry-run]`
    - `plynth resolve --state <path>` (re-run Phase 5 only)
-   - Auth via `GHES_TOKEN` env var or `--token` flag
+   - Auth via `PLYNTH_TOKEN` env var or `--token` flag
 
 ## What NOT to build in Phase B
 
@@ -226,7 +238,5 @@ Build in this order. Each step should be testable independently.
 
 ## Roadmap
 
-- github.com URL handling (currently uses GHES `/api/graphql` and `/api/v3` paths)
-- Test suite, CI, and lint/type-check gates (target: v0.2)
-- Sanitized example template + instance YAML, plus design specs (in-flight)
-- Post-v0.2: drift detection, GitHub Action wrapper, additional backends
+- v0.3.0 (in flight): github.com support via `target`, PyPI trusted publishing.
+- Post-0.3: drift detection, GitHub Action wrapper, additional backends.

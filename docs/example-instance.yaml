@@ -5,10 +5,10 @@
 ---
 template: example-template.yaml
 
-# GitHub API base URL.
-# GitHub.com: "https://api.github.com"  (github.com URL handling: near-term roadmap)
+# GitHub host plynth should talk to.
+# GitHub.com: "github.com" (or "" / "https://api.github.com")
 # GHES:       "https://ghes.example.com"
-ghes_url: "https://ghes.example.com"
+target: "https://ghes.example.com"
 
 # Organization (or user) that owns the target repository and project board.
 org: "myorg"

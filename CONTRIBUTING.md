@@ -65,7 +65,8 @@ Reference issues where applicable: `fixes #42`.
 
 Tests must never use real tokens or make real API calls.
 All HTTP interactions are mocked via the `responses` library.
-Never commit `GHES_TOKEN` or any credential to the repository — see [SECURITY.md](SECURITY.md).
+Never commit `PLYNTH_TOKEN` (or the deprecated `GHES_TOKEN`) or any credential
+to the repository — see [SECURITY.md](SECURITY.md).
 
 ## Scope
 

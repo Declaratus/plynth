@@ -171,7 +171,7 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
         template_version=template.template.version,
         instance_org=instance.org,
         instance_repo=instance.repo.name,
-        ghes_url=instance.ghes_url,
+        target=instance.target,
         project_name=instance.project.name,
         project_description=project_desc,
         status_options=list(template.status),
@@ -201,7 +201,8 @@ def format_dry_run(ep: ExecutionPlan) -> str:
 
     w("=== plynth Execution Plan ===")
     w(f"Template: {ep.template_name} ({ep.template_version})")
-    w(f"Target:   {ep.ghes_url} / {ep.instance_org} / {ep.instance_repo}")
+    target_display = ep.target if ep.target else "github.com"
+    w(f"Target:   {target_display} / {ep.instance_org} / {ep.instance_repo}")
     w(f"Project:  {ep.project_name}")
     w("")
 

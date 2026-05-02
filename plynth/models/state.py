@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TemplateRef(BaseModel):
@@ -93,6 +94,18 @@ PHASE_7_STATE_FILE = "phase_7_state_file"
 class StateFile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_ghes_url(cls, data: Any) -> Any:
+        """v0.2.0 state files used `ghes_url`. Silently rename to `target` so
+        in-flight runs keep resuming after the v0.3.0 upgrade. State files are
+        machine-written; a hard rename would gratuitously break resume."""
+        if isinstance(data, dict) and "ghes_url" in data:
+            data = {**data}
+            legacy = data.pop("ghes_url")
+            data.setdefault("target", legacy)
+        return data
+
     schema_version: str = "1.0"
     created_at: str = ""
     updated_at: str = ""
@@ -100,7 +113,7 @@ class StateFile(BaseModel):
     instance_sha256: str = ""
     template: TemplateRef | None = None
     instance: InstanceRef | None = None
-    ghes_url: str = ""
+    target: str = ""
     org: str = ""
     repo: RepoState | None = None
     project: ProjectState | None = None

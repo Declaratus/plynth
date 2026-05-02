@@ -14,7 +14,7 @@ from pathlib import Path
 import responses
 import yaml
 
-from plynth.engine.api_base import GHESClient
+from plynth.engine.api_base import GitHubClient
 from plynth.engine.graphql_client import GraphQLClient
 from plynth.engine.phases import PhaseOrchestrator
 from plynth.engine.planner import plan
@@ -207,10 +207,10 @@ def _build_orchestrator(
     instance: InstanceConfig,
     state_path: Path,
 ) -> tuple[PhaseOrchestrator, StateFile]:
-    base = GHESClient(GHES_URL, "tok", write_delay_ms=0)
+    base = GitHubClient(GHES_URL, "tok", write_delay_ms=0)
     gql = GraphQLClient(base)
     rest = RESTClient(base)
-    state = StateFile(ghes_url=GHES_URL, org=instance.org)
+    state = StateFile(target=GHES_URL, org=instance.org)
     state.repo = None  # populated by phase 1
     ep = plan(template, instance)
     return (
@@ -349,7 +349,7 @@ def test_phases_e2e_resume_from_disk_is_noop(
     with open(state_path, encoding="utf-8") as f:
         loaded_state = StateFile.model_validate(yaml.safe_load(f))
 
-    base = GHESClient(GHES_URL, "tok", write_delay_ms=0)
+    base = GitHubClient(GHES_URL, "tok", write_delay_ms=0)
     fresh_orch = PhaseOrchestrator(
         plan=plan(minimal_template, minimal_instance),
         gql=GraphQLClient(base),
@@ -362,3 +362,77 @@ def test_phases_e2e_resume_from_disk_is_noop(
 
     # No new API calls should have been issued — every phase already complete.
     assert len(responses.calls) == first_run_call_count
+
+
+# ── github.com target ─────────────────────────────────────────────
+
+GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
+GITHUB_MILESTONE_URL = "https://api.github.com/repos/example-org/acme/milestones"
+
+
+def _build_orchestrator_with_target(
+    template: TemplateDefinition,
+    instance: InstanceConfig,
+    state_path: Path,
+    target: str,
+) -> tuple[PhaseOrchestrator, StateFile]:
+    base = GitHubClient(target, "tok", write_delay_ms=0)
+    gql = GraphQLClient(base)
+    rest = RESTClient(base)
+    state = StateFile(target=target, org=instance.org)
+    state.repo = None
+    ep = plan(template, instance)
+    return (
+        PhaseOrchestrator(
+            plan=ep,
+            gql=gql,
+            rest=rest,
+            state=state,
+            state_path=state_path,
+            logger=logging.getLogger("plynth.test"),
+        ),
+        state,
+    )
+
+
+@responses.activate
+def test_phases_e2e_against_github_com(
+    minimal_template: TemplateDefinition,
+    minimal_instance: InstanceConfig,
+    tmp_path: Path,
+) -> None:
+    """The same happy path against target='github.com' must hit api.github.com
+    URLs (no /api/v3 prefix) and succeed."""
+    dispatcher = _GraphQLDispatcher()
+    responses.add_callback(
+        responses.POST,
+        GITHUB_GRAPHQL_URL,
+        callback=dispatcher,
+        content_type="application/json",
+    )
+    for i in range(1, 3):
+        responses.add(
+            responses.POST,
+            GITHUB_MILESTONE_URL,
+            json={"number": i, "node_id": f"MI_{i}", "title": f"M{i}"},
+            status=201,
+        )
+
+    # Override the target in the loaded instance so the planner emits a
+    # github.com plan — fixture is GHES-shaped.
+    instance = minimal_instance.model_copy(update={"target": "github.com"})
+
+    orch, state = _build_orchestrator_with_target(
+        minimal_template, instance, tmp_path / "state.yaml", "github.com"
+    )
+    orch.execute()
+
+    # The mocked URLs above are the only ones registered; if the engine had
+    # used the GHES-shaped paths, `responses` would have raised
+    # ConnectionError. Verify Phase 1+2 finished as a final sanity check.
+    assert state.is_phase_complete(PHASE_1_PROJECT_AND_FIELDS)
+    assert state.is_phase_complete(PHASE_2_MILESTONES)
+    # And confirm at least one call hit each api.github.com endpoint.
+    urls_called = [call.request.url for call in responses.calls]
+    assert any(url.startswith(GITHUB_GRAPHQL_URL) for url in urls_called)
+    assert any(url.startswith(GITHUB_MILESTONE_URL) for url in urls_called)

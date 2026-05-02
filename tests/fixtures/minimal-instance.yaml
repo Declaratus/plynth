@@ -1,5 +1,5 @@
 template: "minimal-template.yaml"
-ghes_url: "https://ghes.example.com/"
+target: "https://ghes.example.com/"
 org: "example-org"
 
 values:

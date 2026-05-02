@@ -53,7 +53,7 @@ class ExecutionPlan(BaseModel):
     template_version: str
     instance_org: str
     instance_repo: str
-    ghes_url: str
+    target: str
     project_name: str
     project_description: str
 
