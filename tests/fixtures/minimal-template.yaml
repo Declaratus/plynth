@@ -1,0 +1,60 @@
+schema_version: "1.0"
+
+template:
+  name: "Minimal Test Template"
+  description: "Smallest viable template for unit tests."
+  version: "0.0.1"
+
+placeholders:
+  APP:
+    description: "Application name."
+    example: "Acme"
+    required: true
+  PREFIX:
+    description: "Cross-reference prefix."
+    example: "ACME"
+    required: true
+  TEAM:
+    description: "Owning team."
+    example: "Platform"
+    required: false
+
+status:
+  - {value: "Todo", color: "GRAY"}
+  - {value: "Done", color: "GREEN"}
+
+fields:
+  - id: priority
+    name: "Priority"
+    type: single_select
+    options: ["P1", "P2", "{TEAM}"]
+
+milestones:
+  - id: M1
+    title: "{APP} Foundation"
+    description: "First milestone for {APP}."
+    due_offset_weeks: 2
+  - id: M2
+    title: "{APP} Hardening"
+    description: "Second milestone."
+    due_offset_weeks: 4
+    optional: true
+
+issues:
+  - template_id: "{PREFIX}-001"
+    title: "Bootstrap {APP}"
+    milestone_id: M1
+    fields: {priority: "P1"}
+    body: "Set up initial scaffolding for {APP}."
+  - template_id: "{PREFIX}-002"
+    title: "Configure {APP}"
+    milestone_id: M1
+    fields: {priority: "P2"}
+    blocked_by: ["{PREFIX}-001"]
+    body: "Depends on {PREFIX}-001 completing."
+  - template_id: "{PREFIX}-003"
+    title: "Harden {APP}"
+    milestone_id: M2
+    fields: {priority: "{TEAM}"}
+    blocked_by: ["{PREFIX}-002"]
+    body: "Final hardening of {APP}."

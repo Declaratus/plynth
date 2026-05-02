@@ -9,6 +9,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Added
+- Unit test foundation under `tests/`: shared fixtures
+  (`tests/fixtures/minimal-template.yaml`, `tests/fixtures/minimal-instance.yaml`),
+  conftest, and tests for `models.template`, `models.instance`, `models.state`,
+  `engine.planner`, `utils.references`, and CLI argument parsing
+  (41 tests, ~0.1s).
+
+### Added (PR 2)
 - LICENSE (Apache 2.0)
 - CHANGELOG.md
 - CONTRIBUTING.md
