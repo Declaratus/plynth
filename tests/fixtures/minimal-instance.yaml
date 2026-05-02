@@ -1,0 +1,19 @@
+template: "minimal-template.yaml"
+ghes_url: "https://ghes.example.com/"
+org: "example-org"
+
+values:
+  APP: "Acme"
+  PREFIX: "ACME"
+  TEAM: "Platform"
+
+repo:
+  name: "acme"
+
+project:
+  name: "Acme Bootstrap"
+  description: "Minimal project for tests ({DATE})."
+
+start_date: "2026-05-01"
+skip_milestones: []
+skip_issues: []
