@@ -12,12 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
 from plynth.engine.api_base import GHESClient
 from plynth.engine.graphql_client import GraphQLClient
 from plynth.engine.phases import PhaseOrchestrator
 from plynth.engine.planner import format_dry_run, plan
 from plynth.engine.rest_client import RESTClient
+from plynth.errors import ConfigError, PlynthError
 from plynth.models.instance import InstanceConfig
 from plynth.models.state import (
     PHASE_5_REFERENCES_AND_DEPS,
@@ -27,6 +29,17 @@ from plynth.models.state import (
     TemplateRef,
 )
 from plynth.models.template import TemplateDefinition
+
+
+def _positive_int(value: str) -> int:
+    """argparse type for flags that must be a positive integer."""
+    try:
+        ivalue = int(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"expected integer, got '{value}'") from e
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"must be > 0, got {ivalue}")
+    return ivalue
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,6 +65,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=1000,
         help="Delay between API writes (ms)",
     )
+    create_parser.add_argument(
+        "--timeout-seconds",
+        type=_positive_int,
+        default=30,
+        help="Per-request HTTP timeout (seconds, default 30, must be > 0)",
+    )
     create_parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
 
     # --- resolve command ---
@@ -62,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_parser.add_argument("--template", required=True, help="Path to template YAML")
     resolve_parser.add_argument("--instance", required=True, help="Path to instance config YAML")
     resolve_parser.add_argument("--token", help="GHES PAT (or set GHES_TOKEN env var)")
+    resolve_parser.add_argument(
+        "--timeout-seconds",
+        type=_positive_int,
+        default=30,
+        help="Per-request HTTP timeout (seconds, default 30, must be > 0)",
+    )
     resolve_parser.add_argument("-v", "--verbose", action="store_true")
 
     return parser
@@ -79,10 +104,14 @@ def main() -> None:
     )
     log = logging.getLogger("plynth")
 
-    if args.command == "create":
-        _cmd_create(args, log)
-    elif args.command == "resolve":
-        _cmd_resolve(args, log)
+    try:
+        if args.command == "create":
+            _cmd_create(args, log)
+        elif args.command == "resolve":
+            _cmd_resolve(args, log)
+    except PlynthError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
 
 
 def _cmd_create(args: argparse.Namespace, log: logging.Logger) -> None:
@@ -103,7 +132,12 @@ def _cmd_create(args: argparse.Namespace, log: logging.Logger) -> None:
     token = _get_token(args)
 
     # 5. Initialize clients
-    base = GHESClient(instance.ghes_url, token, write_delay_ms=args.write_delay_ms)
+    base = GHESClient(
+        instance.ghes_url,
+        token,
+        write_delay_ms=args.write_delay_ms,
+        request_timeout_s=args.timeout_seconds,
+    )
     gql = GraphQLClient(base)
     rest = RESTClient(base)
 
@@ -132,7 +166,7 @@ def _cmd_resolve(args: argparse.Namespace, log: logging.Logger) -> None:
     execution_plan = plan(template, instance)
 
     token = _get_token(args)
-    base = GHESClient(instance.ghes_url, token)
+    base = GHESClient(instance.ghes_url, token, request_timeout_s=args.timeout_seconds)
     gql = GraphQLClient(base)
     rest = RESTClient(base)
 
@@ -158,21 +192,45 @@ def _cmd_resolve(args: argparse.Namespace, log: logging.Logger) -> None:
 
 
 def _load_template(path: str) -> TemplateDefinition:
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return TemplateDefinition.model_validate(data)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except FileNotFoundError as e:
+        raise ConfigError(f"Template file not found: {path}") from e
+    except yaml.YAMLError as e:
+        raise ConfigError(f"Invalid YAML in template '{path}': {e}") from e
+    try:
+        return TemplateDefinition.model_validate(data)
+    except ValidationError as e:
+        raise ConfigError(f"Template '{path}' failed schema validation:\n{e}") from e
 
 
 def _load_instance(path: str) -> InstanceConfig:
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return InstanceConfig.model_validate(data)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except FileNotFoundError as e:
+        raise ConfigError(f"Instance file not found: {path}") from e
+    except yaml.YAMLError as e:
+        raise ConfigError(f"Invalid YAML in instance '{path}': {e}") from e
+    try:
+        return InstanceConfig.model_validate(data)
+    except ValidationError as e:
+        raise ConfigError(f"Instance '{path}' failed schema validation:\n{e}") from e
 
 
 def _load_state(path: Path) -> StateFile:
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return StateFile.model_validate(data)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except FileNotFoundError as e:
+        raise ConfigError(f"State file not found: {path}") from e
+    except yaml.YAMLError as e:
+        raise ConfigError(f"Invalid YAML in state file '{path}': {e}") from e
+    try:
+        return StateFile.model_validate(data)
+    except ValidationError as e:
+        raise ConfigError(f"State file '{path}' failed schema validation:\n{e}") from e
 
 
 def _get_token(args: argparse.Namespace) -> str:

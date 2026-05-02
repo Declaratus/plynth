@@ -9,6 +9,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Added
+- `plynth/errors.py` — user-facing error hierarchy: `PlynthError` (base) →
+  `AuthError`, `NotFoundError`, `NetworkError`, `ConfigError`. `GraphQLError`
+  is now also a `PlynthError` subclass so it's caught by the same handler.
+- `--timeout-seconds` CLI flag (default 30) on both `create` and `resolve`.
+- `request_timeout_s` parameter on `GHESClient`; threaded through to every
+  `session.post` call in `graphql_client` and `rest_client`.
+- `tests/test_errors.py` — covers 401→AuthError, "Could not resolve"→
+  NotFoundError, timeout→NetworkError, connection error→NetworkError, REST
+  401/404 mapping, and CLI top-level handler exit code 2.
+
+### Changed
+- `cli.main` now wraps the command dispatch in `try/except PlynthError`,
+  printing `Error: {e}` to stderr and exiting with code 2. Unexpected
+  exceptions still raise so tracebacks aren't hidden.
+- YAML and Pydantic validation failures during template/instance/state
+  loading now raise `ConfigError` with a friendly message instead of a
+  bare exception.
+- GraphQL "Could not resolve to ..." / "could not be found" errors are
+  classified as `NotFoundError` (with the GHES URL appended). Other
+  GraphQL errors still surface as `GraphQLError`.
 - HTTP-mocked integration tests under `tests/`:
   - `test_api_base.py` — write-delay enforcement, retry-after handling,
     exponential backoff on 503.

@@ -1,16 +1,28 @@
 from __future__ import annotations
 
+import requests
+
 from plynth.engine.api_base import GHESClient
+from plynth.errors import AuthError, NetworkError, NotFoundError, PlynthError
 from plynth.queries import mutations, queries
 
 
-class GraphQLError(Exception):
+class GraphQLError(PlynthError):
     """Raised when a GraphQL response contains errors."""
 
     def __init__(self, errors: list[dict]) -> None:
         self.errors = errors
         messages = [e.get("message", str(e)) for e in errors]
         super().__init__(f"GraphQL errors: {'; '.join(messages)}")
+
+
+def _classify_graphql_errors(errors: list[dict], ghes_url: str) -> PlynthError:
+    """Map GraphQL `errors[]` entries to a friendly PlynthError subclass."""
+    for err in errors:
+        msg = err.get("message", "")
+        if "Could not resolve to" in msg or "could not be found" in msg.lower():
+            return NotFoundError(f"{msg.rstrip('.')} (GHES: {ghes_url})")
+    return GraphQLError(errors)
 
 
 class GraphQLClient:
@@ -32,23 +44,41 @@ class GraphQLClient:
             self.base._wait_for_write_delay()
 
         for attempt in range(self.base.max_retries):
-            response = self.base.session.post(
-                self.endpoint,
-                json={"query": query, "variables": variables or {}},
-            )
+            try:
+                response = self.base.session.post(
+                    self.endpoint,
+                    json={"query": query, "variables": variables or {}},
+                    timeout=self.base.request_timeout_s,
+                )
+            except requests.Timeout as e:
+                raise NetworkError(
+                    f"GraphQL request to {self.base.ghes_url} timed out "
+                    f"after {self.base.request_timeout_s}s"
+                ) from e
+            except requests.ConnectionError as e:
+                raise NetworkError(f"Could not connect to {self.base.ghes_url}: {e}") from e
 
             if response.ok:
                 result = response.json()
                 if "errors" in result:
-                    raise GraphQLError(result["errors"])
+                    raise _classify_graphql_errors(result["errors"], self.base.ghes_url)
                 if is_mutation:
                     self.base._record_write()
                 return result["data"]
 
+            if response.status_code == 401:
+                raise AuthError(
+                    f"Token rejected by {self.base.ghes_url}; verify GHES_TOKEN "
+                    f"scopes include `repo` and `project`."
+                )
+
             if not self.base._handle_retry(response, attempt):
                 response.raise_for_status()
 
-        raise RuntimeError("Max retries exceeded for GraphQL call")
+        raise NetworkError(
+            f"Max retries ({self.base.max_retries}) exceeded for GraphQL "
+            f"call to {self.base.ghes_url}"
+        )
 
     # ── Preflight queries ──────────────────────────────────
 
