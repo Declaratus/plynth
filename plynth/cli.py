@@ -8,13 +8,14 @@ import logging
 import os
 import re
 import sys
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
 
-from plynth.engine.api_base import GHESClient
+from plynth.engine.api_base import GitHubClient
 from plynth.engine.graphql_client import GraphQLClient
 from plynth.engine.phases import PhaseOrchestrator
 from plynth.engine.planner import format_dry_run, plan
@@ -57,7 +58,10 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without executing"
     )
-    create_parser.add_argument("--token", help="GHES PAT (or set GHES_TOKEN env var)")
+    create_parser.add_argument(
+        "--token",
+        help="GitHub PAT (or set PLYNTH_TOKEN env var)",
+    )
     create_parser.add_argument("--state-dir", default=".", help="Directory for state file output")
     create_parser.add_argument(
         "--write-delay-ms",
@@ -80,7 +84,10 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_parser.add_argument("--state", required=True, help="Path to existing state file")
     resolve_parser.add_argument("--template", required=True, help="Path to template YAML")
     resolve_parser.add_argument("--instance", required=True, help="Path to instance config YAML")
-    resolve_parser.add_argument("--token", help="GHES PAT (or set GHES_TOKEN env var)")
+    resolve_parser.add_argument(
+        "--token",
+        help="GitHub PAT (or set PLYNTH_TOKEN env var)",
+    )
     resolve_parser.add_argument(
         "--timeout-seconds",
         type=_positive_int,
@@ -132,8 +139,8 @@ def _cmd_create(args: argparse.Namespace, log: logging.Logger) -> None:
     token = _get_token(args)
 
     # 5. Initialize clients
-    base = GHESClient(
-        instance.ghes_url,
+    base = GitHubClient(
+        instance.target,
         token,
         write_delay_ms=args.write_delay_ms,
         request_timeout_s=args.timeout_seconds,
@@ -166,7 +173,7 @@ def _cmd_resolve(args: argparse.Namespace, log: logging.Logger) -> None:
     execution_plan = plan(template, instance)
 
     token = _get_token(args)
-    base = GHESClient(instance.ghes_url, token, request_timeout_s=args.timeout_seconds)
+    base = GitHubClient(instance.target, token, request_timeout_s=args.timeout_seconds)
     gql = GraphQLClient(base)
     rest = RESTClient(base)
 
@@ -234,10 +241,22 @@ def _load_state(path: Path) -> StateFile:
 
 
 def _get_token(args: argparse.Namespace) -> str:
-    token = getattr(args, "token", None) or os.environ.get("GHES_TOKEN")
+    token = getattr(args, "token", None) or os.environ.get("PLYNTH_TOKEN")
     if not token:
+        legacy = os.environ.get("GHES_TOKEN")
+        if legacy:
+            warnings.warn(
+                "GHES_TOKEN is deprecated; use PLYNTH_TOKEN instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            print(
+                "Note: GHES_TOKEN is deprecated; rename it to PLYNTH_TOKEN.",
+                file=sys.stderr,
+            )
+            return legacy
         print(
-            "Error: provide --token or set GHES_TOKEN environment variable.",
+            "Error: provide --token or set PLYNTH_TOKEN environment variable.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -281,7 +300,7 @@ def _init_or_load_state(
         instance_sha256=instance_hash,
         template=TemplateRef(file=template_path, version=""),
         instance=InstanceRef(file=instance_path, config_hash=instance_hash),
-        ghes_url=instance.ghes_url,
+        target=instance.target,
         org=instance.org,
         repo=RepoState(name=instance.repo.name),
     )

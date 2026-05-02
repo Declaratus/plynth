@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import requests
 
-from plynth.engine.api_base import GHESClient
+from plynth.engine.api_base import GitHubClient
 from plynth.errors import AuthError, NetworkError, NotFoundError, PlynthError
 from plynth.queries import mutations, queries
 
@@ -16,21 +16,21 @@ class GraphQLError(PlynthError):
         super().__init__(f"GraphQL errors: {'; '.join(messages)}")
 
 
-def _classify_graphql_errors(errors: list[dict], ghes_url: str) -> PlynthError:
+def _classify_graphql_errors(errors: list[dict], display_target: str) -> PlynthError:
     """Map GraphQL `errors[]` entries to a friendly PlynthError subclass."""
     for err in errors:
         msg = err.get("message", "")
         if "Could not resolve to" in msg or "could not be found" in msg.lower():
-            return NotFoundError(f"{msg.rstrip('.')} (GHES: {ghes_url})")
+            return NotFoundError(f"{msg.rstrip('.')} (target: {display_target})")
     return GraphQLError(errors)
 
 
 class GraphQLClient:
-    """GraphQL client for GHES Projects V2 and Issues API."""
+    """GraphQL client for GitHub Projects V2 and Issues API."""
 
-    def __init__(self, base: GHESClient) -> None:
+    def __init__(self, base: GitHubClient) -> None:
         self.base = base
-        self.endpoint = f"{base.ghes_url}/api/graphql"
+        self.endpoint = base.graphql_endpoint
 
     def execute(
         self,
@@ -52,23 +52,23 @@ class GraphQLClient:
                 )
             except requests.Timeout as e:
                 raise NetworkError(
-                    f"GraphQL request to {self.base.ghes_url} timed out "
+                    f"GraphQL request to {self.base.display_target} timed out "
                     f"after {self.base.request_timeout_s}s"
                 ) from e
             except requests.ConnectionError as e:
-                raise NetworkError(f"Could not connect to {self.base.ghes_url}: {e}") from e
+                raise NetworkError(f"Could not connect to {self.base.display_target}: {e}") from e
 
             if response.ok:
                 result = response.json()
                 if "errors" in result:
-                    raise _classify_graphql_errors(result["errors"], self.base.ghes_url)
+                    raise _classify_graphql_errors(result["errors"], self.base.display_target)
                 if is_mutation:
                     self.base._record_write()
                 return result["data"]
 
             if response.status_code == 401:
                 raise AuthError(
-                    f"Token rejected by {self.base.ghes_url}; verify GHES_TOKEN "
+                    f"Token rejected by {self.base.display_target}; verify PLYNTH_TOKEN "
                     f"scopes include `repo` and `project`."
                 )
 
@@ -77,7 +77,7 @@ class GraphQLClient:
 
         raise NetworkError(
             f"Max retries ({self.base.max_retries}) exceeded for GraphQL "
-            f"call to {self.base.ghes_url}"
+            f"call to {self.base.display_target}"
         )
 
     # ── Preflight queries ──────────────────────────────────

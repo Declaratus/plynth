@@ -5,7 +5,7 @@ import json
 import pytest
 import responses
 
-from plynth.engine.api_base import GHESClient
+from plynth.engine.api_base import GitHubClient
 from plynth.engine.graphql_client import GraphQLClient, GraphQLError
 
 GHES_URL = "https://ghes.example.com"
@@ -13,7 +13,7 @@ GRAPHQL_URL = f"{GHES_URL}/api/graphql"
 
 
 def _client() -> GraphQLClient:
-    base = GHESClient(GHES_URL, "tok", write_delay_ms=0)
+    base = GitHubClient(GHES_URL, "tok", write_delay_ms=0)
     return GraphQLClient(base)
 
 

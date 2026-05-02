@@ -8,6 +8,37 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`target` config field** (`plynth/models/instance.py`) replacing `ghes_url`.
+  Accepts `""`, `"github.com"`, or `"https://api.github.com"` for GitHub.com,
+  and `"https://<host>"` for GHES. `https://github.com` (the web host),
+  `http://...`, and bare hostnames are rejected with a fix-it message.
+- **`derive_api_roots(target)`** helper in `plynth/engine/api_base.py`.
+  Centralizes the (graphql_endpoint, rest_base) derivation: `/api/graphql` +
+  `/api/v3/...` for GHES, `api.github.com/graphql` + `api.github.com/...` for
+  GitHub.com.
+- **Default request headers**: `User-Agent: plynth/<version>` (read via
+  `importlib.metadata`) and `X-GitHub-Api-Version: 2022-11-28`. github.com
+  rejects requests without a User-Agent on some paths.
+- **`PLYNTH_TOKEN` environment variable** is now the canonical token source.
+
+### Changed
+
+- **`GHESClient` renamed to `GitHubClient`.** A `GHESClient` alias remains and
+  emits a `DeprecationWarning` on instantiation; it will be removed in v0.4.0.
+- **Instance `target` field replaces `ghes_url`.** A v0.2.0 instance file
+  using `ghes_url:` now fails validation with a migration hint pointing at
+  `target` and the v0.3.0 CHANGELOG entry.
+- **State files**: `ghes_url` key silently migrates to `target` so v0.2.0
+  in-flight runs keep resuming. State files are machine-written and a hard
+  rename would gratuitously break resume.
+- **`GHES_TOKEN` is deprecated**; the CLI still falls back to it for one
+  release with a `DeprecationWarning` plus a stderr note.
+- **Error messages** that previously printed `(GHES: <url>)` now print
+  `(target: <display_target>)`, where `display_target` is `"github.com"` for
+  the empty/default target.
+
 ---
 
 ## [0.2.0] — 2026-05-02

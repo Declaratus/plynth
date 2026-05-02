@@ -2,19 +2,57 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 import responses
 
-from plynth.engine.api_base import GHESClient
+from plynth.engine.api_base import GHESClient, GitHubClient
 
 
 def test_auth_header_set() -> None:
-    client = GHESClient("https://ghes.example.com", "tok123", write_delay_ms=0)
+    client = GitHubClient("https://ghes.example.com", "tok123", write_delay_ms=0)
     assert client.session.headers["Authorization"] == "Bearer tok123"
     assert client.session.headers["Accept"] == "application/json"
 
 
+def test_default_headers_include_user_agent_and_api_version() -> None:
+    """github.com 403s missing User-Agent on some paths; pin REST API version too."""
+    client = GitHubClient("github.com", "tok", write_delay_ms=0)
+    assert client.session.headers["User-Agent"].startswith("plynth/")
+    assert client.session.headers["X-GitHub-Api-Version"] == "2022-11-28"
+
+
+def test_endpoints_for_github_com() -> None:
+    client = GitHubClient("github.com", "tok", write_delay_ms=0)
+    assert client.graphql_endpoint == "https://api.github.com/graphql"
+    assert client.rest_base == "https://api.github.com"
+    assert client.display_target == "github.com"
+
+
+def test_endpoints_for_empty_target_default_to_github_com() -> None:
+    client = GitHubClient("", "tok", write_delay_ms=0)
+    assert client.graphql_endpoint == "https://api.github.com/graphql"
+    assert client.rest_base == "https://api.github.com"
+    # display_target falls back to "github.com" for diagnostics.
+    assert client.display_target == "github.com"
+
+
+def test_endpoints_for_ghes() -> None:
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+    assert client.graphql_endpoint == "https://ghes.example.com/api/graphql"
+    assert client.rest_base == "https://ghes.example.com/api/v3"
+    assert client.display_target == "https://ghes.example.com"
+
+
+def test_ghesclient_alias_emits_deprecation_warning() -> None:
+    with pytest.warns(DeprecationWarning, match="GHESClient is deprecated"):
+        client = GHESClient("https://ghes.example.com", "tok", write_delay_ms=0)
+    # Functionally identical to GitHubClient.
+    assert isinstance(client, GitHubClient)
+    assert client.graphql_endpoint == "https://ghes.example.com/api/graphql"
+
+
 def test_write_delay_enforced() -> None:
-    client = GHESClient("https://ghes.example.com", "tok", write_delay_ms=500)
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=500)
     client._record_write()
 
     with patch("plynth.engine.api_base.time") as mock_time:
@@ -29,7 +67,7 @@ def test_write_delay_enforced() -> None:
 
 
 def test_write_delay_not_enforced_when_elapsed() -> None:
-    client = GHESClient("https://ghes.example.com", "tok", write_delay_ms=500)
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=500)
     client._record_write()
 
     with patch("plynth.engine.api_base.time") as mock_time:
@@ -41,7 +79,7 @@ def test_write_delay_not_enforced_when_elapsed() -> None:
 
 
 def test_handle_retry_with_retry_after_header() -> None:
-    client = GHESClient("https://ghes.example.com", "tok", write_delay_ms=0)
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
 
     @responses.activate
     def _do() -> bool:
@@ -61,7 +99,7 @@ def test_handle_retry_with_retry_after_header() -> None:
 
 
 def test_handle_retry_503_uses_exponential_backoff() -> None:
-    client = GHESClient("https://ghes.example.com", "tok", write_delay_ms=0)
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
 
     @responses.activate
     def _do() -> None:
@@ -76,7 +114,7 @@ def test_handle_retry_503_uses_exponential_backoff() -> None:
 
 
 def test_handle_retry_returns_false_on_200() -> None:
-    client = GHESClient("https://ghes.example.com", "tok", write_delay_ms=0)
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
 
     @responses.activate
     def _do() -> bool:

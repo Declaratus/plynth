@@ -6,7 +6,7 @@ import pytest
 import requests
 import responses
 
-from plynth.engine.api_base import GHESClient
+from plynth.engine.api_base import GitHubClient
 from plynth.engine.graphql_client import GraphQLClient, GraphQLError
 from plynth.engine.rest_client import RESTClient
 from plynth.errors import AuthError, NetworkError, NotFoundError, PlynthError
@@ -17,11 +17,11 @@ MILESTONE_URL = f"{GHES_URL}/api/v3/repos/example-org/acme/milestones"
 
 
 def _gql() -> GraphQLClient:
-    return GraphQLClient(GHESClient(GHES_URL, "tok", write_delay_ms=0))
+    return GraphQLClient(GitHubClient(GHES_URL, "tok", write_delay_ms=0))
 
 
 def _rest() -> RESTClient:
-    return RESTClient(GHESClient(GHES_URL, "tok", write_delay_ms=0))
+    return RESTClient(GitHubClient(GHES_URL, "tok", write_delay_ms=0))
 
 
 def test_error_hierarchy() -> None:
@@ -95,7 +95,7 @@ def test_graphql_timeout_kwarg_passed_to_session_post() -> None:
     session.post to capture the kwargs and assert the value directly."""
     from unittest.mock import MagicMock, patch
 
-    base = GHESClient(GHES_URL, "tok", write_delay_ms=0, request_timeout_s=7)
+    base = GitHubClient(GHES_URL, "tok", write_delay_ms=0, request_timeout_s=7)
     gql = GraphQLClient(base)
 
     fake_response = MagicMock()
@@ -111,7 +111,7 @@ def test_graphql_timeout_kwarg_passed_to_session_post() -> None:
 
 def test_graphql_timeout_message_uses_configured_value() -> None:
     """A timeout error surfaces with the client's configured timeout in the message."""
-    base = GHESClient(GHES_URL, "tok", write_delay_ms=0, request_timeout_s=7)
+    base = GitHubClient(GHES_URL, "tok", write_delay_ms=0, request_timeout_s=7)
     gql = GraphQLClient(base)
 
     @responses.activate

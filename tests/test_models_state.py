@@ -38,9 +38,35 @@ def test_touch_updates_timestamp() -> None:
 
 
 def test_roundtrip_through_model_dump() -> None:
-    s = StateFile(org="example-org", ghes_url="https://ghes.example.com")
+    s = StateFile(org="example-org", target="https://ghes.example.com")
     s.mark_phase_complete(PHASE_1_PROJECT_AND_FIELDS)
     dumped = s.model_dump()
     rebuilt = StateFile.model_validate(dumped)
     assert rebuilt.org == "example-org"
     assert rebuilt.is_phase_complete(PHASE_1_PROJECT_AND_FIELDS)
+
+
+def test_legacy_ghes_url_key_silently_migrated() -> None:
+    """v0.2.0 state files used `ghes_url:`. State files are machine-written, so
+    a hard rename would gratuitously break in-flight runs. Verify the silent
+    migration in the model_validator(mode='before') hook."""
+    legacy_dump = {
+        "schema_version": "1.0",
+        "ghes_url": "https://ghes.example.com",
+        "org": "example-org",
+    }
+    s = StateFile.model_validate(legacy_dump)
+    assert s.target == "https://ghes.example.com"
+    assert s.org == "example-org"
+
+
+def test_legacy_ghes_url_does_not_override_target_if_both_present() -> None:
+    """Defensive: if both keys are somehow present, prefer the new `target` key."""
+    data = {
+        "schema_version": "1.0",
+        "ghes_url": "https://old.example.com",
+        "target": "https://new.example.com",
+        "org": "example-org",
+    }
+    s = StateFile.model_validate(data)
+    assert s.target == "https://new.example.com"
