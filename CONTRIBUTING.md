@@ -73,3 +73,10 @@ to the repository — see [SECURITY.md](SECURITY.md).
 plynth is intentionally minimal in its runtime dependencies (pydantic, pyyaml, requests).
 Before adding a dependency, consider whether the functionality can be
 implemented without it. Open an issue to discuss if unsure.
+
+## Good places to start
+
+If you are looking for a first contribution, see the
+[good-first-issue queue](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22good-first-issue%22).
+The active milestone view at <https://github.com/Declaratus/plynth/milestones>
+shows what's currently in flight and what's queued for the next release.

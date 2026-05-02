@@ -1,7 +1,7 @@
 ---
 name: Bug report
 about: Something isn't working as expected
-labels: bug
+labels: ["type:bug"]
 ---
 
 ## Describe the bug

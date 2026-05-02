@@ -1,7 +1,7 @@
 ---
 name: Feature request
 about: Suggest a new capability or improvement
-labels: enhancement
+labels: ["type:feature"]
 ---
 
 ## Summary
