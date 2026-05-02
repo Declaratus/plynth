@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+
 import pytest
+import requests
 import responses
 
 from plynth.engine.api_base import GHESClient
@@ -144,7 +147,7 @@ def test_graphql_error_response_raises() -> None:
 def test_http_error_after_retries_raises() -> None:
     # 4xx that isn't in the retry list bubbles up immediately.
     responses.add(responses.POST, GRAPHQL_URL, status=401)
-    with pytest.raises(Exception):  # noqa: B017 - requests.HTTPError
+    with pytest.raises(requests.HTTPError):
         _client().get_org_id("nope")
 
 
@@ -161,5 +164,14 @@ def test_request_body_includes_query_and_variables() -> None:
     sent = responses.calls[0].request
     assert sent.body is not None
     body_text = sent.body.decode() if isinstance(sent.body, bytes) else sent.body
-    assert "example-org" in body_text
-    assert "query" in body_text
+    payload = json.loads(body_text)
+
+    # Assert query and variables are sent as separate JSON members — not
+    # interpolated into the query string. A regression that inlined the login
+    # into `query` would fail the variables check below.
+    assert "query" in payload
+    assert "variables" in payload
+    assert payload["variables"] == {"login": "example-org"}
+    # The query itself should NOT contain the login literal — it must be a
+    # parameterized GraphQL operation.
+    assert "example-org" not in payload["query"]

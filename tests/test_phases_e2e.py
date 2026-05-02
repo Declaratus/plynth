@@ -12,6 +12,7 @@ import logging
 from pathlib import Path
 
 import responses
+import yaml
 
 from plynth.engine.api_base import GHESClient
 from plynth.engine.graphql_client import GraphQLClient
@@ -266,29 +267,70 @@ def test_phases_e2e_happy_path(
     for iss in state.issues.values():
         assert iss.item_id.startswith("PVTI_")
 
-    # Phase 5 — body update should have run for issues containing {PREFIX}-### refs
+    # Phase 5 — body update should have run for the two issues with crossrefs.
     assert state.is_phase_complete(PHASE_5_REFERENCES_AND_DEPS)
-    # ACME-002 body references {PREFIX}-001 → should be rewritten to "#47"
-    rewritten_bodies = [body for _, body in dispatcher.body_updates]
-    assert any("#47" in b for b in rewritten_bodies)
-    # Dependency edges wired (ACME-002 blocked_by ACME-001, ACME-003 blocked_by ACME-002)
-    assert len(dispatcher.add_blocked_by_calls) == 2
-    assert len(state.dependencies_created) == 2
 
-    # Phase 7
+    # Map node_id → rewritten body and assert each expected rewrite explicitly.
+    # Issues are created in template order: 001=#47, 002=#48, 003=#49.
+    body_by_node = dict(dispatcher.body_updates)
+    issue_002_node = state.issues["002"].node_id
+    issue_003_node = state.issues["003"].node_id
+    assert body_by_node[issue_002_node] == "Depends on #47 completing."
+    assert body_by_node[issue_003_node] == "Final hardening of Acme. After #48."
+    # Issue 001 has no crossref so its body should NOT be updated.
+    assert state.issues["001"].node_id not in body_by_node
+
+    # Dependency edges: assert exact (issueId, blockingIssueId) pairs, not just count.
+    issue_001_node = state.issues["001"].node_id
+    expected_edges = {
+        # 002 blocked_by 001
+        (issue_002_node, issue_001_node),
+        # 003 blocked_by 002
+        (issue_003_node, issue_002_node),
+    }
+    assert set(dispatcher.add_blocked_by_calls) == expected_edges
+
+    # The state's recorded dependency edges use template_ids, not node_ids.
+    recorded = {(e.blocked, e.blocker) for e in state.dependencies_created}
+    assert recorded == {("002", "001"), ("003", "002")}
+
+    # Phase 7 — final state written.
     assert state.is_phase_complete(PHASE_7_STATE_FILE)
-
-    # State file written
     assert state_path.exists()
+
+    # Reload from disk and verify on-disk serialization. A YAML serialization
+    # bug would otherwise pass the in-memory assertions above.
+    with open(state_path, encoding="utf-8") as f:
+        on_disk = StateFile.model_validate(yaml.safe_load(f))
+    assert on_disk.project is not None
+    assert on_disk.project.node_id == "PVT_1"
+    assert on_disk.project.number == 7
+    assert set(on_disk.milestones.keys()) == {"M1", "M2"}
+    assert set(on_disk.issues.keys()) == {"001", "002", "003"}
+    assert {iss.number for iss in on_disk.issues.values()} == {47, 48, 49}
+    assert "_status" in on_disk.fields
+    assert on_disk.fields["_status"].options["Backlog"] == "opt_backlog"
+    on_disk_edges = {(e.blocked, e.blocker) for e in on_disk.dependencies_created}
+    assert on_disk_edges == {("002", "001"), ("003", "002")}
+    for phase in (
+        PHASE_1_PROJECT_AND_FIELDS,
+        PHASE_2_MILESTONES,
+        PHASE_3_ISSUES,
+        PHASE_4_PROJECT_ITEMS,
+        PHASE_5_REFERENCES_AND_DEPS,
+        PHASE_7_STATE_FILE,
+    ):
+        assert on_disk.is_phase_complete(phase)
 
 
 @responses.activate
-def test_phases_e2e_resume_is_noop(
+def test_phases_e2e_resume_from_disk_is_noop(
     minimal_template: TemplateDefinition,
     minimal_instance: InstanceConfig,
     tmp_path: Path,
 ) -> None:
-    """A second `execute()` call after a successful run should issue no API calls."""
+    """After a successful run, building a fresh orchestrator from the on-disk
+    state file should issue no API calls — exercising the persisted resume path."""
     dispatcher = _GraphQLDispatcher()
     responses.add_callback(
         responses.POST, GRAPHQL_URL, callback=dispatcher, content_type="application/json"
@@ -296,12 +338,27 @@ def test_phases_e2e_resume_is_noop(
     _register_milestones(milestone_count=2)
 
     state_path = tmp_path / "state.yaml"
-    orch, state = _build_orchestrator(minimal_template, minimal_instance, state_path)
+    orch, _ = _build_orchestrator(minimal_template, minimal_instance, state_path)
     orch.execute()
 
     first_run_call_count = len(responses.calls)
     assert first_run_call_count > 0
 
-    # Second run on the same orchestrator + state should skip every phase.
-    orch.execute()
+    # Build a fresh orchestrator by loading state from disk — simulating a
+    # restart. This is what `cli._init_or_load_state` does in production.
+    with open(state_path, encoding="utf-8") as f:
+        loaded_state = StateFile.model_validate(yaml.safe_load(f))
+
+    base = GHESClient(GHES_URL, "tok", write_delay_ms=0)
+    fresh_orch = PhaseOrchestrator(
+        plan=plan(minimal_template, minimal_instance),
+        gql=GraphQLClient(base),
+        rest=RESTClient(base),
+        state=loaded_state,
+        state_path=state_path,
+        logger=logging.getLogger("plynth.test"),
+    )
+    fresh_orch.execute()
+
+    # No new API calls should have been issued — every phase already complete.
     assert len(responses.calls) == first_run_call_count

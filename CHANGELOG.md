@@ -15,9 +15,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `test_graphql_client.py` — happy-path coverage for every mutation/query
     plus `GraphQLError` on `errors[]` response and HTTP error passthrough.
   - `test_rest_client.py` — milestone create happy + 422 error.
-  - `test_phases_e2e.py` — full Phase 1→7 happy path against an in-test
-    GraphQL dispatcher; asserts state file contents and that a second run
-    is a no-op (resume behavior).
+  - `test_phases_e2e.py` — orchestrator runs Phases 1, 2, 3, 4, 5, 7
+    (Phase 6 / views is intentionally skipped by the orchestrator) against
+    an in-test GraphQL dispatcher; asserts in-memory state, then reloads
+    the YAML state file and reasserts on-disk contents, then builds a
+    fresh orchestrator from the loaded state and confirms a second run
+    issues zero API calls (persisted resume path).
 - Test fixture `template_id`s switched from `{PREFIX}-NNN` to bare `NNN` to
   match production templates.
 
