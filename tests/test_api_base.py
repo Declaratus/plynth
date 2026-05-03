@@ -113,6 +113,26 @@ def test_handle_retry_503_uses_exponential_backoff() -> None:
     _do()
 
 
+def test_handle_retry_clamps_large_retry_after_to_60s() -> None:
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+
+    @responses.activate
+    def _do() -> bool:
+        responses.add(
+            responses.GET,
+            "https://ghes.example.com/api/test",
+            status=429,
+            headers={"Retry-After": "999999"},
+        )
+        r = client.session.get("https://ghes.example.com/api/test")
+        with patch("plynth.engine.api_base.time.sleep") as mock_sleep:
+            should_retry = client._handle_retry(r, attempt=0)
+            mock_sleep.assert_called_once_with(60.0)
+        return should_retry
+
+    assert _do() is True
+
+
 def test_handle_retry_returns_false_on_200() -> None:
     client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
 
