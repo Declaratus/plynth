@@ -149,7 +149,8 @@ def _cmd_create(args: argparse.Namespace, log: logging.Logger) -> None:
     rest = RESTClient(base)
 
     # 6. Initialize or resume state file
-    state_path = Path(args.state_dir) / f"{_slugify(execution_plan.project_name)}.plynth-state.yaml"
+    state_dir = _resolve_state_dir(args.state_dir)
+    state_path = state_dir / f"{_slugify(execution_plan.project_name)}.plynth-state.yaml"
     state = _init_or_load_state(state_path, args.template, args.instance, instance, log)
 
     # 7. Execute
@@ -241,7 +242,17 @@ def _load_state(path: Path) -> StateFile:
 
 
 def _get_token(args: argparse.Namespace) -> str:
-    token = getattr(args, "token", None) or os.environ.get("PLYNTH_TOKEN")
+    explicit = getattr(args, "token", None)
+    env_token = os.environ.get("PLYNTH_TOKEN")
+    if explicit and explicit != env_token:
+        # Suppress when --token duplicates PLYNTH_TOKEN (redundant, not risky).
+        print(
+            "Warning: passing --token on the command line exposes the token "
+            "in shell history and process listings. Set PLYNTH_TOKEN in the "
+            "environment instead.",
+            file=sys.stderr,
+        )
+    token = explicit or env_token
     if not token:
         legacy = os.environ.get("GHES_TOKEN")
         if legacy:
@@ -261,6 +272,30 @@ def _get_token(args: argparse.Namespace) -> str:
         )
         sys.exit(1)
     return token
+
+
+def _resolve_state_dir(path_str: str) -> Path:
+    """Resolve --state-dir to an absolute Path with writability checks.
+
+    Rejects (a) a path that exists but is not a directory, and (b) a missing
+    path whose parent is not a writable directory. Does not create the
+    directory; if the path is missing but the parent is writable, the caller
+    is responsible for any later mkdir or write.
+    """
+    path = Path(path_str).resolve()
+    if path.exists():
+        if not path.is_dir():
+            raise ConfigError(f"--state-dir '{path}' exists but is not a directory.")
+        if not os.access(path, os.W_OK):
+            raise ConfigError(f"--state-dir '{path}' is not writable.")
+        return path
+    parent = path.parent
+    if not parent.is_dir() or not os.access(parent, os.W_OK):
+        raise ConfigError(
+            f"--state-dir '{path}' does not exist and its parent "
+            f"'{parent}' is not a writable directory."
+        )
+    return path
 
 
 def _init_or_load_state(
