@@ -7,3 +7,22 @@ build/
 *.plynth-state.yaml
 .env
 .venv/
+
+# Credentials & secrets
+secrets.yaml
+secrets.yml
+.env.*
+!.env.example
+.envrc
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+**/.aws/credentials
+**/.npmrc
+**/.pypirc
