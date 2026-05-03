@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import warnings
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -43,6 +44,21 @@ def _positive_int(value: str) -> int:
     return ivalue
 
 
+def _bounded_int(lo: int, hi: int) -> Callable[[str], int]:
+    """Return an argparse type function that accepts integers in [lo, hi]."""
+
+    def _validate(value: str) -> int:
+        try:
+            ivalue = int(value)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"expected integer, got '{value}'") from e
+        if not lo <= ivalue <= hi:
+            raise argparse.ArgumentTypeError(f"must be {lo}-{hi}, got {ivalue}")
+        return ivalue
+
+    return _validate
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the plynth argparse parser. Exposed for test reuse."""
     parser = argparse.ArgumentParser(
@@ -65,9 +81,9 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--state-dir", default=".", help="Directory for state file output")
     create_parser.add_argument(
         "--write-delay-ms",
-        type=int,
+        type=_bounded_int(0, 30_000),
         default=1000,
-        help="Delay between API writes (ms)",
+        help="Delay between API writes (ms, 0–30000)",
     )
     create_parser.add_argument(
         "--timeout-seconds",

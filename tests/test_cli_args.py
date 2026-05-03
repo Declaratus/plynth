@@ -91,3 +91,35 @@ def test_timeout_seconds_accepts_positive() -> None:
         ]
     )
     assert ns.timeout_seconds == 60
+
+
+def test_write_delay_ms_accepts_zero() -> None:
+    parser = build_parser()
+    ns = parser.parse_args(
+        ["create", "--template", "t.yaml", "--instance", "i.yaml", "--write-delay-ms", "0"]
+    )
+    assert ns.write_delay_ms == 0
+
+
+def test_write_delay_ms_accepts_upper_bound() -> None:
+    parser = build_parser()
+    ns = parser.parse_args(
+        ["create", "--template", "t.yaml", "--instance", "i.yaml", "--write-delay-ms", "30000"]
+    )
+    assert ns.write_delay_ms == 30_000
+
+
+def test_write_delay_ms_rejects_negative() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["create", "--template", "t.yaml", "--instance", "i.yaml", "--write-delay-ms", "-1"]
+        )
+
+
+def test_write_delay_ms_rejects_above_upper_bound() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["create", "--template", "t.yaml", "--instance", "i.yaml", "--write-delay-ms", "30001"]
+        )
