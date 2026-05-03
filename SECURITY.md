@@ -40,6 +40,22 @@ Please include:
 We aim to acknowledge reports within 48 hours and to publish a fix within 14 days
 for confirmed critical issues.
 
+### Response SLA by severity
+
+| Severity | Acknowledge | Fix |
+| --- | --- | --- |
+| Critical | 48 hours | 14 days |
+| High | 72 hours | 30 days |
+| Medium | 1 week | 90 days |
+| Low | Best-effort | Best-effort |
+
+### End-user mitigation
+
+While waiting for a fix to ship:
+
+- Pin to the most recent unaffected release until a fix ships.
+- Watch the [Releases page](https://github.com/Declaratus/plynth/releases) — security fixes are tagged in the release notes.
+
 ## Supported versions
 
 Only the latest release receives security fixes.
