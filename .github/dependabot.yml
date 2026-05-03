@@ -1,4 +1,16 @@
 version: 2
+
+# Security-update behaviour note
+# --------------------------------
+# Dependabot opens security-update PRs immediately when a GitHub Advisory
+# Database entry fires for a dependency, regardless of the schedule.interval
+# configured below for routine version bumps.  No additional configuration is
+# required here to enable that behaviour; it is on by default for any
+# package-ecosystem entry in this file.
+#
+# Reference:
+#   https://docs.github.com/en/code-security/dependabot/dependabot-security-updates/about-dependabot-security-updates
+
 updates:
   - package-ecosystem: pip
     directory: /
