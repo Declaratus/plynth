@@ -119,3 +119,17 @@ def test_defaults() -> None:
     assert cfg.field_overrides == {}
     assert cfg.pruning_decision is None
     assert cfg.repo.create is False
+
+
+def test_project_name_over_limit_rejected() -> None:
+    data = _base_instance_dict()
+    data["project"]["name"] = "x" * 257
+    with pytest.raises(ValidationError):
+        InstanceConfig.model_validate(data)
+
+
+def test_project_description_over_limit_rejected() -> None:
+    data = _base_instance_dict()
+    data["project"]["description"] = "x" * 8_193
+    with pytest.raises(ValidationError):
+        InstanceConfig.model_validate(data)
