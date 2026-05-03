@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TemplateMetadata(BaseModel):
@@ -35,15 +35,15 @@ class FieldDefinition(BaseModel):
     id: str
     name: str
     type: Literal["single_select", "text", "number", "date", "iteration"]
-    options: list[str] = []
+    options: list[Annotated[str, Field(max_length=100)]] = []
 
 
 class MilestoneDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    title: str
-    description: str
+    title: str = Field(max_length=256)
+    description: str = Field(max_length=65_536)
     due_offset_weeks: int
     optional: bool = False
 
@@ -52,12 +52,12 @@ class IssueDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     template_id: str
-    title: str
+    title: str = Field(max_length=256)
     milestone_id: str
     fields: dict[str, str] = {}
     blocked_by: list[str] = []
     blocks: list[str] = []
-    body: str = ""
+    body: str = Field(default="", max_length=65_536)
 
 
 class ViewSort(BaseModel):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class RepoConfig(BaseModel):
@@ -16,8 +16,8 @@ class RepoConfig(BaseModel):
 class ProjectConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str
-    description: str = ""
+    name: str = Field(max_length=256)
+    description: str = Field(default="", max_length=8_192)
 
 
 class InstanceConfig(BaseModel):

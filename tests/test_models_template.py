@@ -77,3 +77,38 @@ def test_pruning_unknown_trigger_rejected() -> None:
     }
     with pytest.raises(ValidationError, match="trigger_issue 'T-NOPE' not found"):
         TemplateDefinition.model_validate(data)
+
+
+def test_issue_title_over_limit_rejected() -> None:
+    data = _base_template_dict()
+    data["issues"][0]["title"] = "x" * 257
+    with pytest.raises(ValidationError):
+        TemplateDefinition.model_validate(data)
+
+
+def test_issue_body_over_limit_rejected() -> None:
+    data = _base_template_dict()
+    data["issues"][0]["body"] = "x" * 65_537
+    with pytest.raises(ValidationError):
+        TemplateDefinition.model_validate(data)
+
+
+def test_milestone_title_over_limit_rejected() -> None:
+    data = _base_template_dict()
+    data["milestones"][0]["title"] = "x" * 257
+    with pytest.raises(ValidationError):
+        TemplateDefinition.model_validate(data)
+
+
+def test_milestone_description_over_limit_rejected() -> None:
+    data = _base_template_dict()
+    data["milestones"][0]["description"] = "x" * 65_537
+    with pytest.raises(ValidationError):
+        TemplateDefinition.model_validate(data)
+
+
+def test_field_option_name_over_limit_rejected() -> None:
+    data = _base_template_dict()
+    data["fields"][0]["options"] = ["x" * 101]
+    with pytest.raises(ValidationError):
+        TemplateDefinition.model_validate(data)
