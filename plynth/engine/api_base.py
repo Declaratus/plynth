@@ -107,7 +107,7 @@ class GitHubClient:
         if response.status_code in (429, 403, 502, 503):
             retry_after = response.headers.get("Retry-After")
             if retry_after:
-                time.sleep(float(retry_after))
+                time.sleep(min(float(retry_after), 60.0))
             else:
                 time.sleep(2**attempt)
             return True
