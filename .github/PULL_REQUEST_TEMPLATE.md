@@ -26,4 +26,5 @@
 - [ ] `ruff format --check .` passes
 - [ ] `mypy plynth` passes
 - [ ] `CHANGELOG.md` updated under `## [Unreleased]`
-- [ ] No tokens, credentials, or org-specific names committed
+- [ ] No `--token` flag with a literal value committed in any YAML, shell script, or workflow file
+- [ ] No `PLYNTH_TOKEN` value committed (only references such as `${{ secrets.PLYNTH_TOKEN }}` are OK)
