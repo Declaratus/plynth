@@ -1,0 +1,5 @@
+# Security-sensitive files
+SECURITY.md                    @Barry-Johnston
+.github/workflows/             @Barry-Johnston
+.github/CODEOWNERS             @Barry-Johnston
+pyproject.toml                 @Barry-Johnston
