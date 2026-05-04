@@ -2,7 +2,92 @@
 
 ## Token handling
 
-plynth requires a GitHub Personal Access Token (PAT) with `repo` and `project` scopes.
+plynth accepts any GitHub API bearer token via `PLYNTH_TOKEN` (or
+`--token`). Three token types are supported, in order of preference
+for new setups: fine-grained PAT (recommended), classic PAT, and
+GitHub App tokens (installation or user access). Each is detailed
+below.
+
+### Fine-grained PAT — recommended
+
+Fine-grained PATs scope access to specific repositories and one
+organization, and are the preferred token type for new setups. The
+permission set below is documented end-to-end for github.com targets.
+GHES 3.19 supports fine-grained PATs but has a documentation gap on
+the org-level *Projects* permission — see the GHES caveat below
+before assuming this works the same way against a GHES instance.
+
+Create the token at:
+
+- **github.com:** <https://github.com/settings/personal-access-tokens/new>
+- **GHES:** `https://<your-ghes-host>/settings/personal-access-tokens/new`
+
+Configure with:
+
+- **Resource owner:** the GitHub organization that will own the project.
+- **Repository access:** *Only select repositories* → select the repo
+  named in the instance config's `repo.name`.
+- **Repository permissions:**
+  - **Issues:** *Read and write* — covers `createIssue`, `updateIssue`
+    (body rewrites in Phase 5), `addBlockedBy` (dependency edges), and
+    the REST `POST /repos/{owner}/{repo}/milestones` endpoint, which
+    lives under the Issues permission scope.
+  - **Metadata:** *Read-only* — required for any repository access and
+    auto-granted alongside the other permissions.
+- **Organization permissions:**
+  - **Projects:** *Read and write* — covers `createProjectV2`,
+    `createProjectV2Field`, the project-fields query, `addProjectV2ItemById`,
+    and `updateProjectV2ItemFieldValue`. Projects are owned at the
+    organization level, so this permission lives in the *Organization*
+    section, not under the repository.
+
+No other permissions are required. Granting `Contents`, `Pull requests`,
+or org-wide repo access broadens the blast radius of a leaked token
+without enabling any plynth feature.
+
+> **GHES 3.19 caveat.** GHES 3.19 exposes the ProjectV2 GraphQL
+> mutations, but the required fine-grained PAT permission for
+> ProjectV2 mutations is not documented in the GHES 3.19 fine-grained
+> PAT permissions reference. On github.com, the equivalent permission
+> is documented as an organization-level *Projects* permission, but
+> that section is absent from the GHES 3.19 page. For GHES 3.19,
+> verify fine-grained PAT behavior against the target instance; if it
+> fails or the permission is unavailable in the UI, use a classic PAT
+> with `project` scope (next section) or a GitHub App installation
+> token.
+
+### Classic PAT — supported alternative
+
+Classic PATs with `repo` + `project` scopes authenticate plynth against
+either target type. They grant much broader access than plynth's
+operations call for, so prefer a fine-grained PAT in new setups against
+github.com. Pick a classic PAT when:
+
+- Your GHES instance has fine-grained PATs disabled by admin policy.
+- You want a permission story that is documented end-to-end on GHES
+  3.19 today (see the caveat above on ProjectV2).
+- You're on an older GHES release where fine-grained PATs are not yet GA.
+
+### GitHub Apps
+
+GitHub App authentication is supported on both github.com and GHES
+3.19+, in two flavours that plynth treats identically:
+
+- **Installation tokens (IAT)** — minted server-side from the App's
+  private key. Suitable for automation. This is also the documented
+  fallback when a fine-grained PAT can't grant the *Projects*
+  permission on a GHES 3.19 instance (see the caveat above).
+- **User access tokens (UAT)** — minted via the OAuth user-consent
+  flow.
+
+The plynth CLI does not currently bootstrap either flow itself, so
+this is a "bring your own token" path rather than an integrated one.
+If you have an external flow that produces a token of either type,
+plynth will accept it via `PLYNTH_TOKEN`. The App's installation
+permissions must match the fine-grained PAT permission set above
+(repository *Issues* + *Metadata*, organization *Projects*).
+
+### Operational handling
 
 **Do:**
 - Pass the token via the `PLYNTH_TOKEN` environment variable.

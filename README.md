@@ -36,7 +36,13 @@ target: https://api.github.com           # equivalent
 target: https://ghes.example.com         # GHES — REST under /api/v3
 ```
 
-Authenticate with `PLYNTH_TOKEN=ghp_...` (or `--token`). `GHES_TOKEN` is
+Authenticate with `PLYNTH_TOKEN` (or `--token`). On github.com, a
+fine-grained PAT with repository *Issues: Read and write* + organization
+*Projects: Read and write* is the recommended shape; on GHES 3.19+,
+the Issues permissions are documented but the ProjectV2 permission
+story is less certain (see SECURITY.md for the caveat). Classic PATs
+with `repo` + `project` scopes work end-to-end on either target. Full
+breakdown in [SECURITY.md](SECURITY.md#token-handling). `GHES_TOKEN` is
 accepted for one release with a deprecation warning.
 
 ## Technology stack
