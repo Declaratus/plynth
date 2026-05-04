@@ -10,6 +10,7 @@ import yaml
 
 from plynth.engine.graphql_client import GraphQLClient
 from plynth.engine.rest_client import RESTClient
+from plynth.errors import PlynthError
 from plynth.models.plan import ExecutionPlan, ResolvedIssue
 from plynth.models.state import (
     PHASE_1_PROJECT_AND_FIELDS,
@@ -74,10 +75,22 @@ class PhaseOrchestrator:
                 self.state.mark_phase_complete(phase_key)
                 self._save_state()
                 self.log.info(f"Completed {phase_key}")
-            except Exception as e:
+            except PlynthError as e:
+                # User-facing failure: message is already friendly. Record
+                # cleanly so a resume can show what went wrong.
                 self.state.mark_phase_error(phase_key, str(e))
                 self._save_state()
                 self.log.error(f"Failed in {phase_key}: {e}")
+                raise
+            except Exception as e:
+                # Unhandled error (programming bug, third-party library
+                # crash). Prefix the class name on the state marker so an
+                # operator inspecting the state file can tell internal
+                # failures from user-facing ones, and log with traceback
+                # since the message alone may not be enough to diagnose.
+                self.state.mark_phase_error(phase_key, f"{type(e).__name__}: {e}")
+                self._save_state()
+                self.log.exception(f"Unhandled error in {phase_key}")
                 raise
 
     def _save_state(self) -> None:
