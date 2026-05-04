@@ -8,6 +8,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **SECURITY.md** now documents the exact PAT permissions plynth needs.
+  A fine-grained PAT with repository *Issues: Read and write* +
+  organization *Projects: Read and write* is the recommended shape on
+  github.com. The same shape is intended to apply to GHES 3.19+, but
+  GHES 3.19's fine-grained-PAT permissions reference does not currently
+  document the org-level Projects permission for the ProjectV2 GraphQL
+  mutations — verify against your instance before relying on it, or
+  fall back to a classic PAT with `repo` + `project` scopes or a
+  GitHub App installation token. GitHub App authentication (both
+  installation tokens and user access tokens) is documented as a
+  bring-your-own-token path; the CLI does not bootstrap either flow
+  itself.
+
 ---
 
 ## [0.3.0] — 2026-05-02
