@@ -2,16 +2,20 @@
 
 ## Token handling
 
-plynth authenticates against the GitHub API with a Personal Access Token.
-A fine-grained PAT is the recommended shape on both target types.
+plynth accepts any GitHub API bearer token via `PLYNTH_TOKEN` (or
+`--token`). Three token types are supported, in order of preference
+for new setups: fine-grained PAT (recommended), classic PAT, and
+GitHub App tokens (installation or user access). Each is detailed
+below.
 
 ### Fine-grained PAT — recommended
 
 Fine-grained PATs scope access to specific repositories and one
-organization, and are the preferred token type for new setups. They are
-supported on both github.com and GitHub Enterprise Server 3.19+ (the
-GHES versions plynth targets), so the same permission set applies to
-both.
+organization, and are the preferred token type for new setups. The
+permission set below is documented end-to-end for github.com targets.
+GHES 3.19 supports fine-grained PATs but has a documentation gap on
+the org-level *Projects* permission — see the GHES caveat below
+before assuming this works the same way against a GHES instance.
 
 Create the token at:
 
