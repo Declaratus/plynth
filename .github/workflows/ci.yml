@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -38,3 +41,30 @@ jobs:
 
       - name: Tests (pytest)
         run: pytest -q
+
+  audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # `local: true` audits the project's runtime dependencies as
+      # declared in pyproject.toml -- not the [dev] extras (pytest/
+      # ruff/mypy/responses) which never ship to users. The action
+      # manages pip-audit in its own venv so its tooling deps don't
+      # pollute the scanned set. Fails on any reported vulnerability;
+      # to suppress a specific advisory, see the `ignore-vulns` input
+      # documented in CONTRIBUTING.md.
+      - uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          local: true
+          # CVE-2026-3219 is in pip itself (the runner's installed
+          # package-manager bootstrap, not a plynth runtime dependency)
+          # and has no upstream fix yet. Revisit when pip ships a patch
+          # or when GitHub-hosted runners pick up a newer pip.
+          ignore-vulns: |
+            CVE-2026-3219

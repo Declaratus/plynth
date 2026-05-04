@@ -37,6 +37,25 @@ ruff format .
 
 Configuration lives in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]`.
 
+## Security checks
+
+CI runs two additional security gates on every PR and on push to `main`:
+
+- **CodeQL** ([.github/workflows/codeql.yml](.github/workflows/codeql.yml))
+  runs static analysis with the `security-and-quality` query suite.
+  Findings appear under the repository's **Security** tab. Also runs
+  weekly on Mondays so advisories added to the CodeQL database in
+  quiet weeks are still caught.
+- **pip-audit** (the `audit` job in [.github/workflows/ci.yml](.github/workflows/ci.yml))
+  scans plynth's declared runtime dependencies — the
+  `[project] dependencies` block in `pyproject.toml`, not the `[dev]`
+  extras (pytest, ruff, mypy, responses, etc.) which never ship to
+  users — for known CVEs. Fails the build on any reported vulnerability,
+  including ones without an upstream fix yet. If the team accepts the
+  risk of a specific advisory, add it under the action's `ignore-vulns`
+  input in `ci.yml` with an inline comment documenting the rationale
+  and the date to revisit.
+
 ## Commit messages
 
 Use the conventional commit format:
