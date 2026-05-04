@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import logging
 import os
 import re
 import sys
+import tempfile
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
@@ -275,26 +277,34 @@ def _get_token(args: argparse.Namespace) -> str:
 
 
 def _resolve_state_dir(path_str: str) -> Path:
-    """Resolve --state-dir to an absolute Path with writability checks.
+    """Resolve --state-dir to an absolute Path, validating via a write probe.
 
-    Rejects (a) a path that exists but is not a directory, and (b) a missing
-    path whose parent is not a writable directory. Does not create the
-    directory; if the path is missing but the parent is writable, the caller
-    is responsible for any later mkdir or write.
+    Rejects: (a) a path that exists but is not a directory, (b) any missing
+    path (the user is responsible for creating it; we never auto-mkdir),
+    (c) a path that exists as a directory but cannot accept a new file.
+
+    Writability is asserted by attempting to create-and-delete a uniquely
+    named tempfile inside the candidate directory. This is more reliable
+    than ``os.access``: on POSIX it catches the ``W_OK``-without-``X_OK``
+    case where the kernel rejects ``open()`` despite the write bit being
+    set; on Windows it reflects ACL decisions that ``os.access`` does not.
     """
     path = Path(path_str).resolve()
-    if path.exists():
-        if not path.is_dir():
-            raise ConfigError(f"--state-dir '{path}' exists but is not a directory.")
-        if not os.access(path, os.W_OK):
-            raise ConfigError(f"--state-dir '{path}' is not writable.")
-        return path
-    parent = path.parent
-    if not parent.is_dir() or not os.access(parent, os.W_OK):
+    if path.exists() and not path.is_dir():
+        raise ConfigError(f"--state-dir '{path}' exists but is not a directory.")
+    try:
+        fd, probe_path = tempfile.mkstemp(prefix=".plynth-probe-", dir=str(path))
+    except FileNotFoundError as e:
         raise ConfigError(
-            f"--state-dir '{path}' does not exist and its parent "
-            f"'{parent}' is not a writable directory."
-        )
+            f"--state-dir '{path}' does not exist. Create the directory first."
+        ) from e
+    except OSError as e:
+        raise ConfigError(f"--state-dir '{path}' is not writable: {e.strerror or e}.") from e
+    os.close(fd)
+    # Best-effort cleanup; the probe file is tiny and prefixed for easy
+    # manual removal if cleanup somehow fails.
+    with contextlib.suppress(OSError):
+        os.unlink(probe_path)
     return path
 
 
