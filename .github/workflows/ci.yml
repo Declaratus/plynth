@@ -52,12 +52,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Audits plynth's declared runtime dependencies in pyproject.toml,
-      # not the [dev] extras (pytest/ruff/mypy/responses) which never
-      # ship. The action runs pip-audit in isolation so its own deps
-      # don't pollute the scanned set. Fails on any reported
-      # vulnerability; to suppress a specific advisory, see the
-      # `ignore-vulns` input documented in CONTRIBUTING.md.
+      # `local: true` audits the project's runtime dependencies as
+      # declared in pyproject.toml -- not the [dev] extras (pytest/
+      # ruff/mypy/responses) which never ship to users. The action
+      # manages pip-audit in its own venv so its tooling deps don't
+      # pollute the scanned set. Fails on any reported vulnerability;
+      # to suppress a specific advisory, see the `ignore-vulns` input
+      # documented in CONTRIBUTING.md.
       - uses: pypa/gh-action-pip-audit@v1.1.0
         with:
-          inputs: pyproject.toml
+          local: true
