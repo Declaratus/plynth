@@ -37,6 +37,22 @@ ruff format .
 
 Configuration lives in `pyproject.toml` under `[tool.ruff]` and `[tool.mypy]`.
 
+## Security checks
+
+CI runs two additional security gates on every PR and on push to `main`:
+
+- **CodeQL** ([.github/workflows/codeql.yml](.github/workflows/codeql.yml))
+  runs static analysis with the `security-and-quality` query suite.
+  Findings appear under the repository's **Security** tab. Also runs
+  weekly on Mondays so advisories added to the CodeQL database in
+  quiet weeks are still caught.
+- **pip-audit** (the `audit` job in [.github/workflows/ci.yml](.github/workflows/ci.yml))
+  scans the resolved dependency tree for known CVEs and fails the build on
+  any vulnerability with a fix available. If a vulnerability has no
+  upstream fix and the risk is acceptable, append
+  `--ignore-vuln <CVE-ID>` to the `pip-audit` invocation with an inline
+  comment documenting the rationale and the date to revisit.
+
 ## Commit messages
 
 Use the conventional commit format:
