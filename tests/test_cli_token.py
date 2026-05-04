@@ -14,16 +14,49 @@ def _ns(token: str | None = None) -> argparse.Namespace:
     return argparse.Namespace(token=token)
 
 
-def test_get_token_uses_explicit_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_token_uses_explicit_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.delenv("PLYNTH_TOKEN", raising=False)
     monkeypatch.delenv("GHES_TOKEN", raising=False)
     assert cli._get_token(_ns(token="from-flag")) == "from-flag"
+    # 1.4 — passing the secret on the CLI should surface a stderr warning
+    # so users notice the shell-history / process-listing exposure.
+    assert "exposes the token" in capsys.readouterr().err
 
 
-def test_get_token_reads_plynth_token(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_token_flag_warning_suppressed_when_env_matches(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Redundant --token (same value as PLYNTH_TOKEN) is not worth warning about."""
+    monkeypatch.setenv("PLYNTH_TOKEN", "same")
+    monkeypatch.delenv("GHES_TOKEN", raising=False)
+    assert cli._get_token(_ns(token="same")) == "same"
+    assert "exposes the token" not in capsys.readouterr().err
+
+
+def test_get_token_flag_warning_emitted_when_overriding_env(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """If --token differs from PLYNTH_TOKEN, the flag is actively overriding — warn."""
+    monkeypatch.setenv("PLYNTH_TOKEN", "from-env")
+    monkeypatch.delenv("GHES_TOKEN", raising=False)
+    assert cli._get_token(_ns(token="from-flag")) == "from-flag"
+    assert "exposes the token" in capsys.readouterr().err
+
+
+def test_get_token_reads_plynth_token(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.setenv("PLYNTH_TOKEN", "from-env")
     monkeypatch.delenv("GHES_TOKEN", raising=False)
     assert cli._get_token(_ns()) == "from-env"
+    # Pure env-var path must not trigger the --token warning.
+    assert "exposes the token" not in capsys.readouterr().err
 
 
 def test_get_token_prefers_plynth_token_over_legacy(

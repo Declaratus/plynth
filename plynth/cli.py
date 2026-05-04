@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import logging
 import os
 import re
 import sys
+import tempfile
 import warnings
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -165,7 +167,8 @@ def _cmd_create(args: argparse.Namespace, log: logging.Logger) -> None:
     rest = RESTClient(base)
 
     # 6. Initialize or resume state file
-    state_path = Path(args.state_dir) / f"{_slugify(execution_plan.project_name)}.plynth-state.yaml"
+    state_dir = _resolve_state_dir(args.state_dir)
+    state_path = state_dir / f"{_slugify(execution_plan.project_name)}.plynth-state.yaml"
     state = _init_or_load_state(state_path, args.template, args.instance, instance, log)
 
     # 7. Execute
@@ -257,7 +260,17 @@ def _load_state(path: Path) -> StateFile:
 
 
 def _get_token(args: argparse.Namespace) -> str:
-    token = getattr(args, "token", None) or os.environ.get("PLYNTH_TOKEN")
+    explicit = getattr(args, "token", None)
+    env_token = os.environ.get("PLYNTH_TOKEN")
+    if explicit and explicit != env_token:
+        # Suppress when --token duplicates PLYNTH_TOKEN (redundant, not risky).
+        print(
+            "Warning: passing --token on the command line exposes the token "
+            "in shell history and process listings. Set PLYNTH_TOKEN in the "
+            "environment instead.",
+            file=sys.stderr,
+        )
+    token = explicit or env_token
     if not token:
         legacy = os.environ.get("GHES_TOKEN")
         if legacy:
@@ -277,6 +290,38 @@ def _get_token(args: argparse.Namespace) -> str:
         )
         sys.exit(1)
     return token
+
+
+def _resolve_state_dir(path_str: str) -> Path:
+    """Resolve --state-dir to an absolute Path, validating via a write probe.
+
+    Rejects: (a) a path that exists but is not a directory, (b) any missing
+    path (the user is responsible for creating it; we never auto-mkdir),
+    (c) a path that exists as a directory but cannot accept a new file.
+
+    Writability is asserted by attempting to create-and-delete a uniquely
+    named tempfile inside the candidate directory. This is more reliable
+    than ``os.access``: on POSIX it catches the ``W_OK``-without-``X_OK``
+    case where the kernel rejects ``open()`` despite the write bit being
+    set; on Windows it reflects ACL decisions that ``os.access`` does not.
+    """
+    path = Path(path_str).resolve()
+    if path.exists() and not path.is_dir():
+        raise ConfigError(f"--state-dir '{path}' exists but is not a directory.")
+    try:
+        fd, probe_path = tempfile.mkstemp(prefix=".plynth-probe-", dir=str(path))
+    except FileNotFoundError as e:
+        raise ConfigError(
+            f"--state-dir '{path}' does not exist. Create the directory first."
+        ) from e
+    except OSError as e:
+        raise ConfigError(f"--state-dir '{path}' is not writable: {e.strerror or e}.") from e
+    os.close(fd)
+    # Best-effort cleanup; the probe file is tiny and prefixed for easy
+    # manual removal if cleanup somehow fails.
+    with contextlib.suppress(OSError):
+        os.unlink(probe_path)
+    return path
 
 
 def _init_or_load_state(
