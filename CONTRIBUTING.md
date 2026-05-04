@@ -47,11 +47,14 @@ CI runs two additional security gates on every PR and on push to `main`:
   weekly on Mondays so advisories added to the CodeQL database in
   quiet weeks are still caught.
 - **pip-audit** (the `audit` job in [.github/workflows/ci.yml](.github/workflows/ci.yml))
-  scans the resolved dependency tree for known CVEs and fails the build on
-  any vulnerability with a fix available. If a vulnerability has no
-  upstream fix and the risk is acceptable, append
-  `--ignore-vuln <CVE-ID>` to the `pip-audit` invocation with an inline
-  comment documenting the rationale and the date to revisit.
+  scans plynth's declared runtime dependencies — the
+  `[project] dependencies` block in `pyproject.toml`, not the `[dev]`
+  extras (pytest, ruff, mypy, responses, etc.) which never ship to
+  users — for known CVEs. Fails the build on any reported vulnerability,
+  including ones without an upstream fix yet. If the team accepts the
+  risk of a specific advisory, add it under the action's `ignore-vulns`
+  input in `ci.yml` with an inline comment documenting the rationale
+  and the date to revisit.
 
 ## Commit messages
 
