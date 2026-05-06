@@ -1,8 +1,15 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# GitHub's Projects V2 single-select option color set. Sourced from the GHES
+# 3.19 GraphQL schema (ProjectV2SingleSelectFieldOptionColor enum). Anything
+# outside this set is downgraded to GRAY at plan time with a warning so the
+# run still completes against the GHES floor.
+KNOWN_OPTION_COLORS = ("GRAY", "BLUE", "YELLOW", "RED", "PURPLE", "GREEN", "ORANGE", "PINK")
+OptionColor = Literal["GRAY", "BLUE", "YELLOW", "RED", "PURPLE", "GREEN", "ORANGE", "PINK"]
 
 
 class TemplateMetadata(BaseModel):
@@ -29,13 +36,51 @@ class StatusOption(BaseModel):
     color: Literal["GRAY", "BLUE", "YELLOW", "RED", "PURPLE", "GREEN"]
 
 
+class FieldOption(BaseModel):
+    """Rich form of a single-select field option.
+
+    Templates may declare options as plain strings (legacy) or as objects
+    with color/description/default/aliases/deprecated. A field_validator on
+    FieldDefinition.options normalizes strings to FieldOption(value=...) so
+    the engine sees one shape post-parse.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: Annotated[str, Field(max_length=100)]
+    color: OptionColor | None = None
+    description: str = Field(default="", max_length=2_000)
+    default: bool = False
+    aliases: list[Annotated[str, Field(max_length=100)]] = []
+    deprecated: bool = False
+
+
 class FieldDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
     type: Literal["single_select", "text", "number", "date", "iteration"]
-    options: list[Annotated[str, Field(max_length=100)]] = []
+    options: list[FieldOption] = []
+    allow_unknown_values: bool = False
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _normalize_options(cls, v: Any) -> Any:
+        """Accept legacy string options or rich objects. Strings become FieldOption(value=...)."""
+        if not isinstance(v, list):
+            return v
+        return [{"value": opt} if isinstance(opt, str) else opt for opt in v]
+
+    @model_validator(mode="after")
+    def _at_most_one_default(self) -> FieldDefinition:
+        defaults = [opt.value for opt in self.options if opt.default]
+        if len(defaults) > 1:
+            raise ValueError(
+                f"Field '{self.id}': at most one option may have default: true "
+                f"(found {len(defaults)}: {defaults})"
+            )
+        return self
 
 
 class MilestoneDefinition(BaseModel):
@@ -104,6 +149,34 @@ class PruningConfig(BaseModel):
     rules: list[PruningRule]
 
 
+class TemplateDefaults(BaseModel):
+    """Template-level defaults applied to every issue unless overridden.
+
+    Precedence (lowest to highest): engine fallback, template defaults,
+    per-issue values, instance field_overrides. Labels are intentionally
+    deferred until the labels-and-issue-types feature lands.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    fields: dict[str, str] = {}
+
+
+class ReconciliationConfig(BaseModel):
+    """Reserved namespace for the reconciliation/verify lifecycle.
+
+    Today only ``mode: none`` is honored. ``report_only`` parses but is
+    treated identically to ``none`` until the verify subcommand lands.
+    The namespace is reserved now because every model uses extra="forbid",
+    so adding fields later breaks anyone who put a placeholder block in.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["none", "report_only"] = "none"
+    verify_after_apply: bool = False
+
+
 class TemplateDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -116,6 +189,8 @@ class TemplateDefinition(BaseModel):
     issues: list[IssueDefinition] = []
     views: list[ViewDefinition] = []
     pruning: PruningConfig | None = None
+    defaults: TemplateDefaults = TemplateDefaults()
+    reconciliation: ReconciliationConfig = ReconciliationConfig()
 
     @model_validator(mode="after")
     def _validate_references(self) -> TemplateDefinition:
@@ -162,6 +237,10 @@ class TemplateDefinition(BaseModel):
                 for ref in rule.remove_issues:
                     if ref not in template_ids:
                         errors.append(f"Pruning remove_issues ref '{ref}' not found in issues")
+
+        for field_key in self.defaults.fields:
+            if field_key not in field_ids:
+                errors.append(f"defaults.fields: key '{field_key}' not found in fields")
 
         if errors:
             raise ValueError("Template reference validation failed:\n  " + "\n  ".join(errors))

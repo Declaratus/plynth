@@ -112,3 +112,109 @@ def test_field_option_name_over_limit_rejected() -> None:
     data["fields"][0]["options"] = ["x" * 101]
     with pytest.raises(ValidationError):
         TemplateDefinition.model_validate(data)
+
+
+# ── M1-A: rich field option objects ────────────────────────────────
+
+
+def test_field_option_legacy_string_form_normalizes() -> None:
+    data = _base_template_dict()
+    data["fields"][0]["options"] = ["P1", "P2"]
+    t = TemplateDefinition.model_validate(data)
+    opts = t.fields[0].options
+    assert [o.value for o in opts] == ["P1", "P2"]
+    assert all(o.color is None for o in opts)
+    assert all(o.description == "" for o in opts)
+    assert all(o.default is False for o in opts)
+
+
+def test_field_option_rich_form_roundtrips() -> None:
+    data = _base_template_dict()
+    data["fields"][0]["options"] = [
+        "P1",
+        {
+            "value": "P2",
+            "color": "RED",
+            "description": "Critical",
+            "default": True,
+            "aliases": ["urgent"],
+            "deprecated": False,
+        },
+    ]
+    t = TemplateDefinition.model_validate(data)
+    opts = t.fields[0].options
+    assert opts[0].value == "P1" and opts[0].color is None
+    assert opts[1].value == "P2"
+    assert opts[1].color == "RED"
+    assert opts[1].description == "Critical"
+    assert opts[1].default is True
+    assert opts[1].aliases == ["urgent"]
+
+
+def test_field_option_invalid_color_rejected() -> None:
+    data = _base_template_dict()
+    data["fields"][0]["options"] = [{"value": "P1", "color": "TEAL"}]
+    with pytest.raises(ValidationError):
+        TemplateDefinition.model_validate(data)
+
+
+def test_field_option_two_defaults_rejected() -> None:
+    data = _base_template_dict()
+    data["fields"][0]["options"] = [
+        {"value": "P1", "default": True},
+        {"value": "P2", "default": True},
+    ]
+    with pytest.raises(ValidationError, match="at most one option may have default"):
+        TemplateDefinition.model_validate(data)
+
+
+def test_field_allow_unknown_values_defaults_false() -> None:
+    data = _base_template_dict()
+    t = TemplateDefinition.model_validate(data)
+    assert t.fields[0].allow_unknown_values is False
+
+
+# ── M1-B: template-level defaults ──────────────────────────────────
+
+
+def test_template_defaults_default_empty() -> None:
+    t = TemplateDefinition.model_validate(_base_template_dict())
+    assert t.defaults.fields == {}
+
+
+def test_template_defaults_parses() -> None:
+    data = _base_template_dict()
+    data["defaults"] = {"fields": {"priority": "P1"}}
+    t = TemplateDefinition.model_validate(data)
+    assert t.defaults.fields == {"priority": "P1"}
+
+
+def test_template_defaults_unknown_field_key_rejected() -> None:
+    data = _base_template_dict()
+    data["defaults"] = {"fields": {"nope": "x"}}
+    with pytest.raises(ValidationError, match="defaults.fields: key 'nope' not found"):
+        TemplateDefinition.model_validate(data)
+
+
+# ── M1-G: reconciliation namespace stub ────────────────────────────
+
+
+def test_reconciliation_default_none() -> None:
+    t = TemplateDefinition.model_validate(_base_template_dict())
+    assert t.reconciliation.mode == "none"
+    assert t.reconciliation.verify_after_apply is False
+
+
+def test_reconciliation_report_only_parses() -> None:
+    data = _base_template_dict()
+    data["reconciliation"] = {"mode": "report_only", "verify_after_apply": True}
+    t = TemplateDefinition.model_validate(data)
+    assert t.reconciliation.mode == "report_only"
+    assert t.reconciliation.verify_after_apply is True
+
+
+def test_reconciliation_invalid_mode_rejected() -> None:
+    data = _base_template_dict()
+    data["reconciliation"] = {"mode": "apply"}
+    with pytest.raises(ValidationError):
+        TemplateDefinition.model_validate(data)

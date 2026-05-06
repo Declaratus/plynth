@@ -129,9 +129,16 @@ fields:
   - id: priority
     name: "Priority"
     type: single_select
+    # Options can be plain strings (legacy) or rich objects with color,
+    # description, default, aliases, and deprecated. See docs/options.md
+    # for the full schema. Mixed forms are allowed in the same field.
     options:
-      - "P1 -- Critical Path"
-      - "P2 -- Important"
+      - value: "P1 -- Critical Path"
+        color: RED
+        description: "Blocks downstream milestones if it slips."
+      - value: "P2 -- Important"
+        color: YELLOW
+        default: true
       - "P3 -- When Capacity Allows"
 
   - id: owner
@@ -141,6 +148,26 @@ fields:
       - "{TEAM}"         # Resolved to "Platform Engineering" (or whatever TEAM is)
       - "Platform"
       - "External"
+
+# ─── Defaults ───────────────────────────────────────────────────
+# Template-level defaults applied to every issue unless overridden.
+# Precedence (lowest to highest): engine fallback, template defaults,
+# per-issue values, instance.field_overrides. Last writer wins per key.
+# Labels are intentionally deferred until the labels-and-issue-types
+# feature lands.
+defaults:
+  fields:
+    workstream: "Operations"
+
+# ─── Reconciliation (reserved namespace) ─────────────────────────
+# Reserved for the verify subcommand and the companion reconcile
+# skill. Today only `mode: none` is honored. `report_only` parses
+# but is treated identically to `none` until reconciliation ships.
+# Reserving the namespace now avoids a schema break later because
+# every model uses extra="forbid".
+reconciliation:
+  mode: none
+  verify_after_apply: false
 
 # ─── Milestones ─────────────────────────────────────────────────
 # Created as GitHub repository milestones (REST, not GraphQL).

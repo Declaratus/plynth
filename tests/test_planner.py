@@ -52,8 +52,9 @@ def test_plan_resolves_team_placeholder_in_field_options(
 ) -> None:
     ep = plan(minimal_template, minimal_instance)
     priority = next(f for f in ep.fields if f.id == "priority")
-    assert "Platform" in priority.options
-    assert "{TEAM}" not in priority.options
+    values = [opt.value for opt in priority.options]
+    assert "Platform" in values
+    assert all("{TEAM}" not in v for v in values)
 
 
 def test_plan_preserves_crossrefs_in_bodies(
@@ -121,3 +122,77 @@ def test_format_dry_run_shape(
     assert "Milestones" in output
     assert "Issues" in output
     assert "Fields" in output
+
+
+# ── M1-A: rich field option resolution + color pre-flight ────────
+
+
+def test_plan_rich_field_options_carry_color_and_description(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.fields[0].options[0].color = "RED"
+    minimal_template.fields[0].options[0].description = "Critical"
+    ep = plan(minimal_template, minimal_instance)
+    priority = next(f for f in ep.fields if f.id == "priority")
+    first = priority.options[0]
+    assert first.color == "RED"
+    assert first.description == "Critical"
+
+
+def test_plan_unknown_color_downgraded_to_gray_with_warning(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    # Bypass the schema validator (which would block this) by writing the
+    # color directly. The planner is the second line of defense for templates
+    # authored against newer GHES that adds colors.
+    minimal_template.fields[0].options[0].color = "TEAL"  # type: ignore[assignment]
+    ep = plan(minimal_template, minimal_instance)
+    priority = next(f for f in ep.fields if f.id == "priority")
+    assert priority.options[0].color == "GRAY"
+    assert any("color 'TEAL' not in the supported set" in w for w in ep.warnings)
+
+
+def test_plan_known_color_unchanged(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.fields[0].options[0].color = "PURPLE"
+    ep = plan(minimal_template, minimal_instance)
+    priority = next(f for f in ep.fields if f.id == "priority")
+    assert priority.options[0].color == "PURPLE"
+    assert not any("not in the supported set" in w for w in ep.warnings)
+
+
+# ── M1-B: template defaults precedence ────────────────────────────
+
+
+def test_plan_template_defaults_applied_when_issue_omits(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.defaults.fields = {"priority": "P2"}
+    # Strip the per-issue priority on the first issue so the default kicks in.
+    minimal_template.issues[0].fields = {}
+    ep = plan(minimal_template, minimal_instance)
+    first = next(i for i in ep.issues if i.template_id == minimal_template.issues[0].template_id)
+    assert first.fields.get("priority") == "P2"
+
+
+def test_plan_per_issue_field_wins_over_template_default(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.defaults.fields = {"priority": "P2"}
+    minimal_template.issues[0].fields = {"priority": "P1"}
+    ep = plan(minimal_template, minimal_instance)
+    first = next(i for i in ep.issues if i.template_id == minimal_template.issues[0].template_id)
+    assert first.fields.get("priority") == "P1"
+
+
+def test_plan_instance_override_wins_over_per_issue_and_defaults(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.defaults.fields = {"priority": "P2"}
+    minimal_template.issues[0].fields = {"priority": "P1"}
+    tid = minimal_template.issues[0].template_id
+    minimal_instance.field_overrides = {tid: {"priority": "Platform"}}
+    ep = plan(minimal_template, minimal_instance)
+    first = next(i for i in ep.issues if i.template_id == tid)
+    assert first.fields.get("priority") == "Platform"

@@ -8,6 +8,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Rich field option objects** (#42). Single-select field options can now
+  declare `color`, `description`, `default`, `aliases`, and `deprecated` as
+  an object instead of a plain string. Plain strings still work; the two
+  forms can mix in the same field. See `docs/options.md`. A new
+  `allow_unknown_values: false` field-level guard rejects drift starters at
+  parse time. Out-of-set colors downgrade to GRAY at plan time with a
+  warning rather than failing the run.
+- **Template-level defaults** (#43). New optional `defaults.fields` section
+  on the template applies field values to every issue unless overridden.
+  Precedence: per-issue value > template default > engine fallback.
+  Instance `field_overrides` retain top precedence. Labels deferred until
+  the labels-and-issue-types feature lands.
+- **`reconciliation:` namespace reserved** (#44). New optional
+  `reconciliation` block on the template carries `mode`
+  (`none` | `report_only`) and `verify_after_apply`. Today only
+  `mode: none` is honored; the namespace is reserved now because every
+  model uses `extra="forbid"`, so adding fields later breaks anyone who
+  already put a placeholder block in. `verify_after_apply` will be wired
+  to the verify subcommand when it ships.
+
 ### Changed
 
 - **SECURITY.md** now documents the exact PAT permissions plynth needs.

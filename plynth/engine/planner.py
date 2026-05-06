@@ -7,10 +7,11 @@ from plynth.models.instance import InstanceConfig
 from plynth.models.plan import (
     ExecutionPlan,
     ResolvedField,
+    ResolvedFieldOption,
     ResolvedIssue,
     ResolvedMilestone,
 )
-from plynth.models.template import TemplateDefinition
+from plynth.models.template import KNOWN_OPTION_COLORS, TemplateDefinition
 
 # Matches {PREFIX}-### patterns in issue bodies (cross-references).
 _CROSSREF_RE = re.compile(r"\{PREFIX\}-(\d{3})")
@@ -107,8 +108,12 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
     # ── Step 4 & 5: Resolve placeholders + trim deps ──────────────
     resolved_issues: list[ResolvedIssue] = []
     for issue in effective_issues:
-        # Apply field overrides before resolution
-        fields = dict(issue.fields)
+        # Field precedence: template defaults → per-issue → instance overrides.
+        # Last writer wins per key. Instance overrides remain top precedence so
+        # operators can still patch a single instance without editing the template.
+        fields: dict[str, str] = {}
+        fields.update(template.defaults.fields)
+        fields.update(issue.fields)
         if issue.template_id in instance.field_overrides:
             fields.update(instance.field_overrides[issue.template_id])
 
@@ -152,15 +157,30 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
         )
 
     # ── Step 6: Resolve field options ──────────────────────────────
-    resolved_field_defs = [
-        ResolvedField(
-            id=f.id,
-            name=f.name,
-            type=f.type,
-            options=[resolve_placeholders(opt, values) for opt in f.options],
-        )
-        for f in template.fields
-    ]
+    # Pre-flight option colors against the GHES floor. Out-of-set colors get
+    # downgraded to GRAY with a warning so the run completes against any
+    # supported version. Templates authored against newer GHES that adds
+    # colors will degrade gracefully on the 3.19 floor.
+    resolved_field_defs: list[ResolvedField] = []
+    for f in template.fields:
+        opts: list[ResolvedFieldOption] = []
+        for opt in f.options:
+            color = opt.color
+            if color is not None and color not in KNOWN_OPTION_COLORS:
+                warnings.append(
+                    f"Field '{f.id}' option '{opt.value}': color '{color}' not in "
+                    f"the supported set {sorted(KNOWN_OPTION_COLORS)}; using GRAY"
+                )
+                color = "GRAY"
+            opts.append(
+                ResolvedFieldOption(
+                    value=resolve_placeholders(opt.value, values),
+                    color=color or "GRAY",
+                    description=resolve_placeholders(opt.description, values),
+                    default=opt.default,
+                )
+            )
+        resolved_field_defs.append(ResolvedField(id=f.id, name=f.name, type=f.type, options=opts))
 
     # ── Step 8: Resolve project description ({DATE}) ──────────────
     project_desc = instance.project.description.replace("{DATE}", date.today().isoformat())
@@ -243,7 +263,9 @@ def format_dry_run(ep: ExecutionPlan) -> str:
     # Fields
     w(f"Fields ({len(ep.fields)}):")
     for f in ep.fields:
-        w(f"  {f.id}: {f.name} [{f.type}] ({len(f.options)} options)")
+        n_colored = sum(1 for o in f.options if o.color != "GRAY")
+        suffix = f", {n_colored} colored" if n_colored else ""
+        w(f"  {f.id}: {f.name} [{f.type}] ({len(f.options)} options{suffix})")
     w("")
 
     # Warnings
