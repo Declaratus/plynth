@@ -189,8 +189,8 @@ class TemplateDefinition(BaseModel):
     issues: list[IssueDefinition] = []
     views: list[ViewDefinition] = []
     pruning: PruningConfig | None = None
-    defaults: TemplateDefaults = TemplateDefaults()
-    reconciliation: ReconciliationConfig = ReconciliationConfig()
+    defaults: TemplateDefaults = Field(default_factory=TemplateDefaults)
+    reconciliation: ReconciliationConfig = Field(default_factory=ReconciliationConfig)
 
     @model_validator(mode="after")
     def _validate_references(self) -> TemplateDefinition:

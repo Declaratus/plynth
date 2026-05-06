@@ -182,6 +182,29 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
             )
         resolved_field_defs.append(ResolvedField(id=f.id, name=f.name, type=f.type, options=opts))
 
+    # ── Step 7: Enforce allow_unknown_values guard ─────────────────
+    # For single-select fields where allow_unknown_values is false (the
+    # default), every resolved issue field value must match a declared
+    # option. Catching this at plan time turns drift into a hard error
+    # instead of a silent runtime skip in Phase 4.
+    strict_field_options: dict[str, set[str]] = {}
+    for tmpl_field, rf in zip(template.fields, resolved_field_defs):
+        if tmpl_field.type == "single_select" and not tmpl_field.allow_unknown_values:
+            strict_field_options[tmpl_field.id] = {opt.value for opt in rf.options}
+
+    unknown_value_errors: list[str] = []
+    for r_issue in resolved_issues:
+        for field_key, value in r_issue.fields.items():
+            allowed = strict_field_options.get(field_key)
+            if allowed is not None and value not in allowed:
+                unknown_value_errors.append(
+                    f"Issue {r_issue.template_id}: field '{field_key}' value "
+                    f"'{value}' is not a declared option. Add the value to the "
+                    f"field's options, or set allow_unknown_values: true on the field."
+                )
+    if unknown_value_errors:
+        raise ValueError("Field value validation failed:\n  " + "\n  ".join(unknown_value_errors))
+
     # ── Step 8: Resolve project description ({DATE}) ──────────────
     project_desc = instance.project.description.replace("{DATE}", date.today().isoformat())
 

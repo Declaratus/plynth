@@ -47,7 +47,7 @@ fields:
 
 ### Field-level guards
 
-`allow_unknown_values: false` (the default) rejects any issue that references a field option not declared in `options`. Drift in field option taxonomy starts when one issue silently introduces a new value, so the strict default protects views and filters that group on the field. Set to `true` only when the field is genuinely free-form.
+`allow_unknown_values: false` (the default) rejects any issue, template default, or instance override that references a field option value not declared in `options`. Enforcement happens at plan time, so drift fails the run cleanly instead of silently skipping later. Drift in field option taxonomy starts when one issue silently introduces a new value, so the strict default protects views and filters that group on the field. Set `allow_unknown_values: true` only when the field is genuinely free-form (e.g., notes, ad-hoc tags).
 
 ## Best practices for option colors
 

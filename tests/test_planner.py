@@ -196,3 +196,45 @@ def test_plan_instance_override_wins_over_per_issue_and_defaults(
     ep = plan(minimal_template, minimal_instance)
     first = next(i for i in ep.issues if i.template_id == tid)
     assert first.fields.get("priority") == "Platform"
+
+
+# ── M1-A: allow_unknown_values guard at plan time ──────────────────
+
+
+def test_plan_unknown_field_value_rejected_by_default(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    # priority field defaults to allow_unknown_values=False; "Bogus" isn't
+    # in the declared option set, so plan-time validation should fail.
+    minimal_template.issues[0].fields = {"priority": "Bogus"}
+    with pytest.raises(ValueError, match="not a declared option"):
+        plan(minimal_template, minimal_instance)
+
+
+def test_plan_unknown_field_value_allowed_when_allow_unknown_values_true(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    priority = next(f for f in minimal_template.fields if f.id == "priority")
+    priority.allow_unknown_values = True
+    minimal_template.issues[0].fields = {"priority": "Bogus"}
+    ep = plan(minimal_template, minimal_instance)
+    first = next(i for i in ep.issues if i.template_id == minimal_template.issues[0].template_id)
+    assert first.fields["priority"] == "Bogus"
+
+
+def test_plan_unknown_value_via_template_default_rejected(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.defaults.fields = {"priority": "Nope"}
+    minimal_template.issues[0].fields = {}
+    with pytest.raises(ValueError, match="not a declared option"):
+        plan(minimal_template, minimal_instance)
+
+
+def test_plan_unknown_value_via_instance_override_rejected(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    tid = minimal_template.issues[0].template_id
+    minimal_instance.field_overrides = {tid: {"priority": "BadOverride"}}
+    with pytest.raises(ValueError, match="not a declared option"):
+        plan(minimal_template, minimal_instance)
