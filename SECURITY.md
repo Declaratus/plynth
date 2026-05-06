@@ -56,6 +56,15 @@ without enabling any plynth feature.
 > with `project` scope (next section) or a GitHub App installation
 > token.
 
+#### Confirmed against GHES 3.19 (2026-05)
+
+A fine-grained PAT with repository *Issues: Read and write* and
+organization *Projects: Read and write* drove a full plynth bootstrap
+end-to-end: project, fields, milestones, issues, project items,
+dependencies, and state file. The permission set documented in
+[PR #39](https://github.com/Declaratus/plynth/pull/39) is the path that
+worked.
+
 ### Classic PAT — supported alternative
 
 Classic PATs with `repo` + `project` scopes authenticate plynth against
