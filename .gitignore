@@ -8,6 +8,9 @@ build/
 .env
 .venv/
 
+# Imported feedback / context (not source)
+.import/
+
 # Credentials & secrets
 secrets.yaml
 secrets.yml
