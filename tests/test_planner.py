@@ -124,7 +124,7 @@ def test_format_dry_run_shape(
     assert "Fields" in output
 
 
-# ── M1-A: rich field option resolution + color pre-flight ────────
+# ── M1-A: rich field option resolution ────────────────────────────
 
 
 def test_plan_rich_field_options_carry_color_and_description(
@@ -139,19 +139,6 @@ def test_plan_rich_field_options_carry_color_and_description(
     assert first.description == "Critical"
 
 
-def test_plan_unknown_color_downgraded_to_gray_with_warning(
-    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
-) -> None:
-    # Bypass the schema validator (which would block this) by writing the
-    # color directly. The planner is the second line of defense for templates
-    # authored against newer GHES that adds colors.
-    minimal_template.fields[0].options[0].color = "TEAL"  # type: ignore[assignment]
-    ep = plan(minimal_template, minimal_instance)
-    priority = next(f for f in ep.fields if f.id == "priority")
-    assert priority.options[0].color == "GRAY"
-    assert any("color 'TEAL' not in the supported set" in w for w in ep.warnings)
-
-
 def test_plan_known_color_unchanged(
     minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
 ) -> None:
@@ -159,7 +146,17 @@ def test_plan_known_color_unchanged(
     ep = plan(minimal_template, minimal_instance)
     priority = next(f for f in ep.fields if f.id == "priority")
     assert priority.options[0].color == "PURPLE"
-    assert not any("not in the supported set" in w for w in ep.warnings)
+
+
+def test_plan_omitted_color_materializes_as_gray(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    # Templates can leave color unset (None). The engine materializes None
+    # as GRAY for the GraphQL mutation, which expects a concrete color.
+    assert minimal_template.fields[0].options[0].color is None
+    ep = plan(minimal_template, minimal_instance)
+    priority = next(f for f in ep.fields if f.id == "priority")
+    assert priority.options[0].color == "GRAY"
 
 
 # ── M1-B: template defaults precedence ────────────────────────────

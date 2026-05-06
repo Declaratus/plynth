@@ -5,10 +5,9 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # GitHub's Projects V2 single-select option color set. Sourced from the GHES
-# 3.19 GraphQL schema (ProjectV2SingleSelectFieldOptionColor enum). Anything
-# outside this set is downgraded to GRAY at plan time with a warning so the
-# run still completes against the GHES floor.
-KNOWN_OPTION_COLORS = ("GRAY", "BLUE", "YELLOW", "RED", "PURPLE", "GREEN", "ORANGE", "PINK")
+# 3.19 GraphQL schema (ProjectV2SingleSelectFieldOptionColor enum). Pydantic
+# rejects out-of-set colors at template parse time, so the engine never sees
+# an invalid value. Add an entry here when a future GHES version adds one.
 OptionColor = Literal["GRAY", "BLUE", "YELLOW", "RED", "PURPLE", "GREEN", "ORANGE", "PINK"]
 
 

@@ -11,7 +11,7 @@ from plynth.models.plan import (
     ResolvedIssue,
     ResolvedMilestone,
 )
-from plynth.models.template import KNOWN_OPTION_COLORS, TemplateDefinition
+from plynth.models.template import TemplateDefinition
 
 # Matches {PREFIX}-### patterns in issue bodies (cross-references).
 _CROSSREF_RE = re.compile(r"\{PREFIX\}-(\d{3})")
@@ -157,29 +157,20 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
         )
 
     # ── Step 6: Resolve field options ──────────────────────────────
-    # Pre-flight option colors against the GHES floor. Out-of-set colors get
-    # downgraded to GRAY with a warning so the run completes against any
-    # supported version. Templates authored against newer GHES that adds
-    # colors will degrade gracefully on the 3.19 floor.
+    # Color is validated against OptionColor at template parse time, so any
+    # color reaching here is already legal. None means "operator left it off"
+    # which we materialize as GRAY for the GraphQL mutation.
     resolved_field_defs: list[ResolvedField] = []
     for f in template.fields:
-        opts: list[ResolvedFieldOption] = []
-        for opt in f.options:
-            color = opt.color
-            if color is not None and color not in KNOWN_OPTION_COLORS:
-                warnings.append(
-                    f"Field '{f.id}' option '{opt.value}': color '{color}' not in "
-                    f"the supported set {sorted(KNOWN_OPTION_COLORS)}; using GRAY"
-                )
-                color = "GRAY"
-            opts.append(
-                ResolvedFieldOption(
-                    value=resolve_placeholders(opt.value, values),
-                    color=color or "GRAY",
-                    description=resolve_placeholders(opt.description, values),
-                    default=opt.default,
-                )
+        opts = [
+            ResolvedFieldOption(
+                value=resolve_placeholders(opt.value, values),
+                color=opt.color or "GRAY",
+                description=resolve_placeholders(opt.description, values),
+                default=opt.default,
             )
+            for opt in f.options
+        ]
         resolved_field_defs.append(ResolvedField(id=f.id, name=f.name, type=f.type, options=opts))
 
     # ── Step 7: Enforce allow_unknown_values guard ─────────────────

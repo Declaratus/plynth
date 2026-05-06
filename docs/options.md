@@ -33,13 +33,13 @@ fields:
         color: YELLOW
         description: "Drive to closure within the milestone."
         default: true
-      - value: "P3"          # mix and match: this one stays a plain string
+      - "P3"                 # mix and match: legacy string form is still valid
 ```
 
 | key | type | default | notes |
 |-----|------|---------|-------|
 | `value` | string (max 100) | required | Display name on the board. Placeholders resolved at plan time. |
-| `color` | enum | omitted (GRAY) | One of GRAY, BLUE, YELLOW, RED, PURPLE, GREEN, ORANGE, PINK. Out-of-set values downgrade to GRAY at plan time with a warning. |
+| `color` | enum | omitted (rendered GRAY) | One of GRAY, BLUE, YELLOW, RED, PURPLE, GREEN, ORANGE, PINK. Anything else fails template validation; add the value to `OptionColor` if a future GHES version introduces a new color. |
 | `description` | string (max 2000) | "" | Tooltip text shown on hover in the project board. |
 | `default` | bool | false | At most one option per field may be `default: true`. Reserved for future "set on item creation" behavior; currently informational. |
 | `aliases` | list[string] | [] | Reserved for future option-rename reconciliation. Currently informational. |
