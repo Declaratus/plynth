@@ -123,3 +123,43 @@ def test_write_delay_ms_rejects_above_upper_bound() -> None:
         parser.parse_args(
             ["create", "--template", "t.yaml", "--instance", "i.yaml", "--write-delay-ms", "30001"]
         )
+
+
+def test_format_defaults_to_text() -> None:
+    parser = build_parser()
+    ns = parser.parse_args(["create", "--template", "t.yaml", "--instance", "i.yaml", "--dry-run"])
+    assert ns.format == "text"
+
+
+def test_format_accepts_json() -> None:
+    parser = build_parser()
+    ns = parser.parse_args(
+        [
+            "create",
+            "--template",
+            "t.yaml",
+            "--instance",
+            "i.yaml",
+            "--dry-run",
+            "--format",
+            "json",
+        ]
+    )
+    assert ns.format == "json"
+
+
+def test_format_rejects_unknown_value() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "create",
+                "--template",
+                "t.yaml",
+                "--instance",
+                "i.yaml",
+                "--dry-run",
+                "--format",
+                "yaml",
+            ]
+        )

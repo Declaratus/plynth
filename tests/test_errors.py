@@ -194,3 +194,32 @@ def test_cli_main_exits_2_on_plynth_error(
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
     assert "Error: Template file not found" in captured.err
+
+
+def test_cli_main_rejects_format_json_without_dry_run(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`--format json` without `--dry-run` is a usage error, not a silent no-op."""
+    from plynth import cli
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "plynth",
+            "create",
+            "--template",
+            "tests/fixtures/minimal-template.yaml",
+            "--instance",
+            "tests/fixtures/minimal-instance.yaml",
+            "--format",
+            "json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main()
+
+    # parser.error exits with code 2 and writes to stderr.
+    assert exc_info.value.code == 2
+    assert "--format only applies to --dry-run" in capsys.readouterr().err

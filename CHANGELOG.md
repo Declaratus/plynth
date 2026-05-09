@@ -10,6 +10,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **JSON dry-run output** (#12). `plynth create --dry-run --format json`
+  emits the resolved `ExecutionPlan` plus an `api_call_estimate` block
+  as a JSON document with a stable `schema_version`. Lets CI plan
+  diffs, bot summaries, and other tooling consume the plan
+  programmatically instead of regex-scraping the text formatter.
+  Default remains `--format text`. Schema documented in
+  [docs/dry-run-json.md](docs/dry-run-json.md); the
+  `api_call_estimate` keys are pinned by a test so accidental renames
+  force a `schema_version` bump.
 - **Rich field option objects** (#42). Single-select field options can now
   declare `color`, `description`, `default`, `aliases`, and `deprecated` as
   an object instead of a plain string. Plain strings still work; the two

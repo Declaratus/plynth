@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from plynth.engine.planner import format_dry_run, plan, resolve_placeholders
+from plynth.engine.planner import (
+    DRY_RUN_JSON_SCHEMA_VERSION,
+    api_call_estimate,
+    dry_run_json_payload,
+    format_dry_run,
+    format_dry_run_json,
+    plan,
+    resolve_placeholders,
+)
 from plynth.models.instance import InstanceConfig
 from plynth.models.template import TemplateDefinition
 
@@ -235,3 +245,83 @@ def test_plan_unknown_value_via_instance_override_rejected(
     minimal_instance.field_overrides = {tid: {"priority": "BadOverride"}}
     with pytest.raises(ValueError, match="not a declared option"):
         plan(minimal_template, minimal_instance)
+
+
+# ── M2: JSON dry-run output ───────────────────────────────────────
+
+
+def test_api_call_estimate_keys_and_total(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    ep = plan(minimal_template, minimal_instance)
+    est = api_call_estimate(ep)
+    # Keys are part of the JSON dry-run schema; pin them so accidental
+    # renames here force a schema_version bump.
+    assert set(est.keys()) == {
+        "milestones",
+        "issues_create",
+        "add_to_project",
+        "field_values",
+        "body_updates",
+        "dependencies",
+        "total",
+    }
+    assert est["total"] == (
+        est["milestones"]
+        + est["issues_create"]
+        + est["add_to_project"]
+        + est["field_values"]
+        + est["body_updates"]
+        + est["dependencies"]
+    )
+
+
+def test_dry_run_json_payload_top_level_keys(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    ep = plan(minimal_template, minimal_instance)
+    payload = dry_run_json_payload(ep)
+    assert set(payload.keys()) == {
+        "schema_version",
+        "plynth_version",
+        "plan",
+        "api_call_estimate",
+    }
+    assert payload["schema_version"] == DRY_RUN_JSON_SCHEMA_VERSION
+
+
+def test_dry_run_json_payload_plan_block_matches_execution_plan(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    ep = plan(minimal_template, minimal_instance)
+    payload = dry_run_json_payload(ep)
+    plan_block = payload["plan"]
+    # Spot-check that the ExecutionPlan dump round-trips through the payload.
+    assert plan_block["template_name"] == ep.template_name
+    assert plan_block["project_name"] == ep.project_name
+    assert plan_block["instance_org"] == ep.instance_org
+    assert plan_block["instance_repo"] == ep.instance_repo
+    assert len(plan_block["issues"]) == len(ep.issues)
+    assert len(plan_block["milestones"]) == len(ep.milestones)
+    assert len(plan_block["fields"]) == len(ep.fields)
+
+
+def test_format_dry_run_json_is_valid_json_and_round_trips(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    ep = plan(minimal_template, minimal_instance)
+    out = format_dry_run_json(ep)
+    parsed = json.loads(out)
+    assert parsed == dry_run_json_payload(ep)
+
+
+def test_format_dry_run_json_includes_warnings_when_present(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    # Skip a milestone that issues depend on so the planner emits warnings.
+    minimal_instance.skip_milestones = [minimal_template.milestones[0].id]
+    ep = plan(minimal_template, minimal_instance)
+    payload = dry_run_json_payload(ep)
+    assert isinstance(payload["plan"]["warnings"], list)
+    # Warnings list mirrors the ExecutionPlan one-to-one.
+    assert payload["plan"]["warnings"] == ep.warnings

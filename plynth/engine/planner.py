@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, timedelta
+from importlib import metadata
+from typing import Any
 
 from plynth.models.instance import InstanceConfig
 from plynth.models.plan import (
@@ -12,6 +15,10 @@ from plynth.models.plan import (
     ResolvedMilestone,
 )
 from plynth.models.template import TemplateDefinition
+
+# Stable schema version for the JSON dry-run payload. Bump on
+# breaking shape changes; document in docs/dry-run-json.md.
+DRY_RUN_JSON_SCHEMA_VERSION = 1
 
 # Matches {PREFIX}-### patterns in issue bodies (cross-references).
 _CROSSREF_RE = re.compile(r"\{PREFIX\}-(\d{3})")
@@ -291,6 +298,27 @@ def format_dry_run(ep: ExecutionPlan) -> str:
         w("")
 
     # API call estimate
+    est = api_call_estimate(ep)
+    total = est["total"]
+
+    w("API call estimate:")
+    w(f"  Milestones:     {est['milestones']} REST calls")
+    w(f"  Issues:         {est['issues_create']} GraphQL createIssue calls")
+    w(f"  Add to project: {est['add_to_project']} GraphQL addProjectV2ItemById calls")
+    w(f"  Field values:   {est['field_values']} GraphQL updateProjectV2ItemFieldValue calls")
+    w(f"  Body updates:   {est['body_updates']} GraphQL updateIssue calls (cross-ref resolution)")
+    w(f"  Dependencies:   {est['dependencies']} GraphQL addBlockedBy calls")
+    w(f"  Total:          ~{total} mutating calls (~{total}s at 1s delay)")
+
+    return "\n".join(lines)
+
+
+def api_call_estimate(ep: ExecutionPlan) -> dict[str, int]:
+    """Counts of mutating API calls plynth will make for *ep*.
+
+    Shared by the text and JSON dry-run formatters; the keys are part
+    of the JSON dry-run schema (see ``docs/dry-run-json.md``).
+    """
     n_issues = len(ep.issues)
     n_milestones = len(ep.milestones)
     n_field_values = sum(len(i.fields) for i in ep.issues)
@@ -298,17 +326,37 @@ def format_dry_run(ep: ExecutionPlan) -> str:
     n_body_updates = n_issues
     n_add_to_project = n_issues
     total = n_milestones + n_issues + n_add_to_project + n_field_values + n_body_updates + n_deps
+    return {
+        "milestones": n_milestones,
+        "issues_create": n_issues,
+        "add_to_project": n_add_to_project,
+        "field_values": n_field_values,
+        "body_updates": n_body_updates,
+        "dependencies": n_deps,
+        "total": total,
+    }
 
-    w("API call estimate:")
-    w(f"  Milestones:     {n_milestones} REST calls")
-    w(f"  Issues:         {n_issues} GraphQL createIssue calls")
-    w(f"  Add to project: {n_add_to_project} GraphQL addProjectV2ItemById calls")
-    w(
-        f"  Field values:   {n_field_values} GraphQL updateProjectV2ItemFieldValue calls"
-        f" ({n_issues} issues \u00d7 {len(ep.fields)} fields)"
-    )
-    w(f"  Body updates:   {n_body_updates} GraphQL updateIssue calls (cross-ref resolution)")
-    w(f"  Dependencies:   {n_deps} GraphQL addBlockedBy calls")
-    w(f"  Total:          ~{total} mutating calls (~{total}s at 1s delay)")
 
-    return "\n".join(lines)
+def dry_run_json_payload(ep: ExecutionPlan) -> dict[str, Any]:
+    """Return the JSON dry-run payload as a plain dict.
+
+    Schema is stable within a major ``schema_version``; additive fields
+    are non-breaking, renames or removals bump the version. The
+    ``plan`` block is the ExecutionPlan dumped by Pydantic, so any new
+    field added to ``ExecutionPlan`` shows up automatically.
+    """
+    try:
+        plynth_version = metadata.version("plynth")
+    except metadata.PackageNotFoundError:
+        plynth_version = "0.0.0"
+    return {
+        "schema_version": DRY_RUN_JSON_SCHEMA_VERSION,
+        "plynth_version": plynth_version,
+        "plan": ep.model_dump(mode="json"),
+        "api_call_estimate": api_call_estimate(ep),
+    }
+
+
+def format_dry_run_json(ep: ExecutionPlan) -> str:
+    """Return the dry-run plan as a JSON string (2-space indent, sorted keys off)."""
+    return json.dumps(dry_run_json_payload(ep), indent=2, ensure_ascii=False)
