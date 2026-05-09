@@ -62,9 +62,11 @@ jobs:
       - uses: pypa/gh-action-pip-audit@v1.1.0
         with:
           local: true
-          # CVE-2026-3219 is in pip itself (the runner's installed
-          # package-manager bootstrap, not a plynth runtime dependency)
-          # and has no upstream fix yet. Revisit when pip ships a patch
-          # or when GitHub-hosted runners pick up a newer pip.
+          # Both CVEs are in pip itself (the runner's installed package
+          # manager bootstrap, not a plynth runtime dependency). Drop an
+          # entry once GitHub-hosted runners ship a new enough pip:
+          #   CVE-2026-3219: no upstream fix at time of pin.
+          #   CVE-2026-6357: fixed in pip 26.1; runner ships 26.0.1.
           ignore-vulns: |
             CVE-2026-3219
+            CVE-2026-6357
