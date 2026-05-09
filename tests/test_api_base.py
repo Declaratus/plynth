@@ -43,6 +43,66 @@ def test_endpoints_for_ghes() -> None:
     assert client.display_target == "https://ghes.example.com"
 
 
+@pytest.mark.parametrize(
+    "target,expected_is_ghes",
+    [
+        ("", False),
+        ("github.com", False),
+        ("github.com/", False),  # trailing slash tolerated by derive_api_roots
+        ("https://api.github.com", False),
+        ("https://api.github.com/", False),  # same
+        ("https://ghes.example.com", True),
+        ("https://ghes.example.com/", True),
+        ("https://github.acme.internal", True),
+    ],
+)
+def test_is_ghes(target: str, expected_is_ghes: bool) -> None:
+    assert GitHubClient(target, "tok", write_delay_ms=0).is_ghes is expected_is_ghes
+
+
+def test_installed_version_starts_none() -> None:
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+    assert client.installed_version is None
+
+
+def test_warn_if_below_warns_when_below(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+    client.installed_version = (3, 19)
+    log = logging.getLogger("plynth.test.warn_if_below_below")
+    with caplog.at_level(logging.WARNING, logger=log.name):
+        client.warn_if_below((3, 20), "views API", log)
+    msgs = [r.message for r in caplog.records if r.name == log.name]
+    assert any("requires GHES 3.20+" in m and "detected 3.19" in m for m in msgs)
+
+
+def test_warn_if_below_silent_when_at_or_above(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+    log = logging.getLogger("plynth.test.warn_if_below_above")
+
+    for version in [(3, 20), (3, 21), (4, 0)]:
+        client.installed_version = version
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger=log.name):
+            client.warn_if_below((3, 20), "views API", log)
+        assert [r for r in caplog.records if r.name == log.name] == []
+
+
+def test_warn_if_below_silent_when_version_unknown(caplog: pytest.LogCaptureFixture) -> None:
+    """github.com (None) and detection failures (also None) must not warn."""
+    import logging
+
+    client = GitHubClient("github.com", "tok", write_delay_ms=0)
+    assert client.installed_version is None
+    log = logging.getLogger("plynth.test.warn_if_below_unknown")
+    with caplog.at_level(logging.WARNING, logger=log.name):
+        client.warn_if_below((3, 20), "views API", log)
+    assert [r for r in caplog.records if r.name == log.name] == []
+
+
 def test_ghesclient_alias_emits_deprecation_warning() -> None:
     with pytest.warns(DeprecationWarning, match="GHESClient is deprecated"):
         client = GHESClient("https://ghes.example.com", "tok", write_delay_ms=0)

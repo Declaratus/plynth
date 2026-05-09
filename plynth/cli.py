@@ -166,6 +166,9 @@ def _cmd_create(args: argparse.Namespace, log: logging.Logger) -> None:
     gql = GraphQLClient(base)
     rest = RESTClient(base)
 
+    # 5b. Detect GHES version (no-op for github.com; informational on failure).
+    rest.detect_installed_version(log)
+
     # 6. Initialize or resume state file
     state_dir = _resolve_state_dir(args.state_dir)
     state_path = state_dir / f"{_slugify(execution_plan.project_name)}.plynth-state.yaml"
@@ -195,6 +198,7 @@ def _cmd_resolve(args: argparse.Namespace, log: logging.Logger) -> None:
     base = GitHubClient(instance.target, token, request_timeout_s=args.timeout_seconds)
     gql = GraphQLClient(base)
     rest = RESTClient(base)
+    rest.detect_installed_version(log)
 
     # Load existing state
     state = _load_state(Path(args.state))

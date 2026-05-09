@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import requests
 
 from plynth.engine.api_base import GitHubClient
@@ -11,6 +13,59 @@ class RESTClient:
 
     def __init__(self, base: GitHubClient) -> None:
         self.base = base
+
+    def detect_installed_version(self, log: logging.Logger | None = None) -> None:
+        """GET `{rest_base}/meta` and cache the parsed version on `base`.
+
+        No-op for github.com targets — `/meta` exists but doesn't return an
+        installed_version, and version-gating against github.com is meaningless
+        anyway (it always has the latest features). For GHES targets, sets
+        `base.installed_version` to a `(major, minor)` tuple, or leaves it None
+        on any kind of failure (network, non-2xx, missing/malformed field).
+        Failures are logged at WARNING but never raised: version detection is
+        informational, not gating.
+        """
+        if not self.base.is_ghes:
+            return
+
+        url = f"{self.base.rest_base}/meta"
+        try:
+            response = self.base.session.get(url, timeout=self.base.request_timeout_s)
+        except requests.RequestException as e:
+            # Detection is informational and must not abort startup. Catch the
+            # full requests hierarchy (Timeout, ConnectionError, SSLError,
+            # InvalidURL, …) so any transport-layer failure produces a warning
+            # and a None version, not a stack trace from `plynth create`.
+            if log is not None:
+                log.warning(f"Could not reach {url} for version detection: {e}")
+            return
+
+        if not response.ok:
+            if log is not None:
+                log.warning(
+                    f"{url} returned HTTP {response.status_code}; skipping version detection."
+                )
+            return
+
+        try:
+            raw = response.json().get("installed_version")
+        except ValueError:
+            if log is not None:
+                log.warning(f"{url} returned non-JSON body; skipping version detection.")
+            return
+
+        parsed = _parse_version(raw)
+        if parsed is None:
+            if log is not None:
+                log.warning(
+                    f"{url} response missing or malformed installed_version "
+                    f"(got {raw!r}); skipping version detection."
+                )
+            return
+
+        self.base.installed_version = parsed
+        if log is not None:
+            log.info(f"Detected GHES {parsed[0]}.{parsed[1]} at {self.base.display_target}")
 
     def create_milestone(
         self,
@@ -122,3 +177,20 @@ class RESTClient:
         raise NetworkError(
             f"Max retries ({self.base.max_retries}) exceeded creating repo '{org}/{name}'"
         )
+
+
+def _parse_version(raw: object) -> tuple[int, int] | None:
+    """Parse a `installed_version` string ("3.20.1") to `(major, minor)`.
+
+    Patch is ignored — feature gating runs at minor granularity. Anything
+    not parseable returns None.
+    """
+    if not isinstance(raw, str):
+        return None
+    parts = raw.split(".")
+    if len(parts) < 2:
+        return None
+    try:
+        return (int(parts[0]), int(parts[1]))
+    except ValueError:
+        return None
