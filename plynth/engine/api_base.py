@@ -94,8 +94,13 @@ class GitHubClient:
 
     @property
     def is_ghes(self) -> bool:
-        """True if the target is a GHES instance (not github.com / api.github.com)."""
-        return self.target not in ("", "github.com", "https://api.github.com")
+        """True if the target is a GHES instance (not github.com / api.github.com).
+
+        Normalizes the trailing slash to match `derive_api_roots`, which
+        tolerates `github.com/` and `https://api.github.com/`. Without this,
+        the trailing-slash variants would route to `/meta` probing.
+        """
+        return self.target.rstrip("/") not in ("", "github.com", "https://api.github.com")
 
     def warn_if_below(
         self,

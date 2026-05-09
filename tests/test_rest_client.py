@@ -189,13 +189,25 @@ def test_detect_installed_version_missing_field_logs_and_leaves_none(
     assert any("missing or malformed installed_version" in m for m in msgs)
 
 
+@pytest.mark.parametrize(
+    "exc",
+    [
+        requests.Timeout("read timeout"),
+        requests.ConnectionError("connection refused"),
+        requests.exceptions.SSLError("certificate verify failed"),
+        requests.exceptions.InvalidURL("bad url"),
+    ],
+    ids=["timeout", "connection", "ssl", "invalid_url"],
+)
 @responses.activate
-def test_detect_installed_version_timeout_logs_and_leaves_none(
-    caplog: pytest.LogCaptureFixture,
+def test_detect_installed_version_transport_errors_logged_not_raised(
+    exc: Exception, caplog: pytest.LogCaptureFixture
 ) -> None:
-    responses.add(responses.GET, META_URL, body=requests.Timeout("read timeout"))
+    """Detection is informational: any requests transport failure must yield
+    a warning and a None version, never propagate."""
+    responses.add(responses.GET, META_URL, body=exc)
     client = _client()
-    log = logging.getLogger("plynth.test.detect_timeout")
+    log = logging.getLogger("plynth.test.detect_transport")
     with caplog.at_level(logging.WARNING, logger=log.name):
         client.detect_installed_version(log)
 

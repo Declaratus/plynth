@@ -48,8 +48,11 @@ def test_endpoints_for_ghes() -> None:
     [
         ("", False),
         ("github.com", False),
+        ("github.com/", False),  # trailing slash tolerated by derive_api_roots
         ("https://api.github.com", False),
+        ("https://api.github.com/", False),  # same
         ("https://ghes.example.com", True),
+        ("https://ghes.example.com/", True),
         ("https://github.acme.internal", True),
     ],
 )

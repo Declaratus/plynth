@@ -31,7 +31,11 @@ class RESTClient:
         url = f"{self.base.rest_base}/meta"
         try:
             response = self.base.session.get(url, timeout=self.base.request_timeout_s)
-        except (requests.Timeout, requests.ConnectionError) as e:
+        except requests.RequestException as e:
+            # Detection is informational and must not abort startup. Catch the
+            # full requests hierarchy (Timeout, ConnectionError, SSLError,
+            # InvalidURL, …) so any transport-layer failure produces a warning
+            # and a None version, not a stack trace from `plynth create`.
             if log is not None:
                 log.warning(f"Could not reach {url} for version detection: {e}")
             return
