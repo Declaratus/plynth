@@ -33,6 +33,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   model uses `extra="forbid"`, so adding fields later breaks anyone who
   already put a placeholder block in. `verify_after_apply` will be wired
   to the verify subcommand when it ships.
+- **GHES version detection** (#15). On startup, plynth now probes
+  `GET {target}/api/v3/meta` for GHES targets and caches the parsed
+  `installed_version` as a `(major, minor)` tuple on the base client. Used
+  by `GitHubClient.warn_if_below(min_version, feature, log)` to emit a
+  friendly warning when a feature requires a higher minor version than
+  the detected one. github.com targets skip the probe (no version field
+  in `/meta` and no useful gating). Detection failures (404, network
+  error, malformed response) log a warning and leave the version as
+  `None`; nothing fails. Prepares the ground for view-API gating
+  (GHES 3.20+) once view automation lands.
 - **Repo creation when `repo.create: true`** (#13). With `repo.create: true`
   in the instance config, Phase 1 creates the target repository (private)
   via REST before resolving its node ID, instead of failing with

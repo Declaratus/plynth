@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 import warnings
 from importlib import metadata
@@ -82,11 +83,41 @@ class GitHubClient:
         self.max_retries = max_retries
         self.request_timeout_s = request_timeout_s
         self._last_write_time: float = 0.0
+        # Populated by RESTClient.detect_installed_version() for GHES targets.
+        # Stays None on github.com (no /meta version) and on detection failure.
+        self.installed_version: tuple[int, int] | None = None
 
     @property
     def display_target(self) -> str:
         """Human-readable target for diagnostics. Empty string → 'github.com'."""
         return self.target if self.target else "github.com"
+
+    @property
+    def is_ghes(self) -> bool:
+        """True if the target is a GHES instance (not github.com / api.github.com)."""
+        return self.target not in ("", "github.com", "https://api.github.com")
+
+    def warn_if_below(
+        self,
+        min_version: tuple[int, int],
+        feature: str,
+        log: logging.Logger,
+    ) -> None:
+        """Log a warning if the GHES version is known and below `min_version`.
+
+        github.com (where `installed_version` is None) is treated as latest and
+        never warns. A failed detection (also None) is silent because the
+        detection itself logged the failure; warning here would double up.
+        """
+        if self.installed_version is None:
+            return
+        if self.installed_version < min_version:
+            have = f"{self.installed_version[0]}.{self.installed_version[1]}"
+            need = f"{min_version[0]}.{min_version[1]}"
+            log.warning(
+                f"Feature '{feature}' requires GHES {need}+, detected {have}. "
+                f"Continuing; the feature may be skipped or fail at the API."
+            )
 
     def _wait_for_write_delay(self) -> None:
         """Enforce minimum delay between mutating calls."""
