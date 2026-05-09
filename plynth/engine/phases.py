@@ -10,7 +10,7 @@ import yaml
 
 from plynth.engine.graphql_client import GraphQLClient
 from plynth.engine.rest_client import RESTClient
-from plynth.errors import PlynthError
+from plynth.errors import NotFoundError, PlynthError
 from plynth.models.plan import ExecutionPlan, ResolvedIssue
 from plynth.models.state import (
     PHASE_1_PROJECT_AND_FIELDS,
@@ -111,7 +111,7 @@ class PhaseOrchestrator:
 
         # 1a. Resolve org and repo IDs
         org_id = self.gql.get_org_id(self.plan.instance_org)
-        repo_id = self.gql.get_repo_id(self.plan.instance_org, self.plan.instance_repo)
+        repo_id = self._resolve_repo_id()
         self.state.repo = RepoState(name=self.plan.instance_repo, node_id=repo_id)
 
         # 1b. Create the project
@@ -163,6 +163,24 @@ class PhaseOrchestrator:
                     options_map[opt["name"]] = opt["id"]
 
             self.state.fields[field_def.id] = FieldState(node_id=raw["id"], options=options_map)
+
+    def _resolve_repo_id(self) -> str:
+        """Look up the repo node ID, creating the repo first if configured.
+
+        With `repo.create: false` (default), a missing repo raises NotFoundError
+        as before. With `repo.create: true`, plynth creates the repo (private)
+        via REST and re-resolves. An already-existing repo is a no-op either way.
+        """
+        org = self.plan.instance_org
+        name = self.plan.instance_repo
+        try:
+            return self.gql.get_repo_id(org, name)
+        except NotFoundError:
+            if not self.plan.instance_repo_create:
+                raise
+            self.log.info(f"Repository {org}/{name} not found, creating (repo.create=true)")
+            self.rest.create_repo(org, name)
+            return self.gql.get_repo_id(org, name)
 
     # ── Phase 2: Create Milestones ─────────────────────────
 

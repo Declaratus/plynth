@@ -205,6 +205,7 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
         template_version=template.template.version,
         instance_org=instance.org,
         instance_repo=instance.repo.name,
+        instance_repo_create=instance.repo.create,
         target=instance.target,
         project_name=instance.project.name,
         project_description=project_desc,

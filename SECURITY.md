@@ -41,9 +41,15 @@ Configure with:
     organization level, so this permission lives in the *Organization*
     section, not under the repository.
 
-No other permissions are required. Granting `Contents`, `Pull requests`,
-or org-wide repo access broadens the blast radius of a leaked token
-without enabling any plynth feature.
+No other permissions are required for the standard bootstrap flow.
+Granting `Contents`, `Pull requests`, or org-wide repo access broadens
+the blast radius of a leaked token without enabling any plynth feature.
+
+If your instance config sets `repo.create: true`, plynth additionally
+needs to call `POST /orgs/{org}/repos` before Phase 1. Add organization
+*Administration: Read and write* to the fine-grained PAT for that case.
+A classic PAT with `repo` scope already covers it. Drop the permission
+once the repo exists; subsequent runs against the same repo do not need it.
 
 > **GHES 3.19 caveat.** GHES 3.19 exposes the ProjectV2 GraphQL
 > mutations, but the required fine-grained PAT permission for

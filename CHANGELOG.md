@@ -33,6 +33,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   model uses `extra="forbid"`, so adding fields later breaks anyone who
   already put a placeholder block in. `verify_after_apply` will be wired
   to the verify subcommand when it ships.
+- **Repo creation when `repo.create: true`** (#13). With `repo.create: true`
+  in the instance config, Phase 1 creates the target repository (private)
+  via REST before resolving its node ID, instead of failing with
+  `NotFoundError`. Existing repos are a no-op; `repo.create: false`
+  (default) keeps the old friendly error. Repo creation needs more than
+  the standard plynth permissions: classic `repo` already covers it; a
+  fine-grained PAT also needs organization *Administration: Read and write*.
+  See SECURITY.md.
 
 ### Changed
 
