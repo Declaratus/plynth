@@ -128,6 +128,11 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
+    # --format only makes sense with --dry-run; reject early so the
+    # flag isn't silently ignored on the execution path.
+    if args.command == "create" and args.format != "text" and not args.dry_run:
+        parser.error("--format only applies to --dry-run")
+
     # Configure logging
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,

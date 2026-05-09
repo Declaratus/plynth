@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import re
 from datetime import date, timedelta
+from importlib import metadata
 from typing import Any
 
-from plynth import __version__ as _plynth_version
 from plynth.models.instance import InstanceConfig
 from plynth.models.plan import (
     ExecutionPlan,
@@ -299,17 +299,13 @@ def format_dry_run(ep: ExecutionPlan) -> str:
 
     # API call estimate
     est = api_call_estimate(ep)
-    n_issues = est["issues_create"]
     total = est["total"]
 
     w("API call estimate:")
     w(f"  Milestones:     {est['milestones']} REST calls")
     w(f"  Issues:         {est['issues_create']} GraphQL createIssue calls")
     w(f"  Add to project: {est['add_to_project']} GraphQL addProjectV2ItemById calls")
-    w(
-        f"  Field values:   {est['field_values']} GraphQL updateProjectV2ItemFieldValue calls"
-        f" ({n_issues} issues \u00d7 {len(ep.fields)} fields)"
-    )
+    w(f"  Field values:   {est['field_values']} GraphQL updateProjectV2ItemFieldValue calls")
     w(f"  Body updates:   {est['body_updates']} GraphQL updateIssue calls (cross-ref resolution)")
     w(f"  Dependencies:   {est['dependencies']} GraphQL addBlockedBy calls")
     w(f"  Total:          ~{total} mutating calls (~{total}s at 1s delay)")
@@ -349,9 +345,13 @@ def dry_run_json_payload(ep: ExecutionPlan) -> dict[str, Any]:
     ``plan`` block is the ExecutionPlan dumped by Pydantic, so any new
     field added to ``ExecutionPlan`` shows up automatically.
     """
+    try:
+        plynth_version = metadata.version("plynth")
+    except metadata.PackageNotFoundError:
+        plynth_version = "0.0.0"
     return {
         "schema_version": DRY_RUN_JSON_SCHEMA_VERSION,
-        "plynth_version": _plynth_version,
+        "plynth_version": plynth_version,
         "plan": ep.model_dump(mode="json"),
         "api_call_estimate": api_call_estimate(ep),
     }

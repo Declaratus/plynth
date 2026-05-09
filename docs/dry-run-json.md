@@ -20,7 +20,7 @@ custom dashboards) can pin to it.
 | Field               | Type   | Notes                                                                                  |
 | ------------------- | ------ | -------------------------------------------------------------------------------------- |
 | `schema_version`    | int    | Bumped on breaking shape changes. Additive fields don't change it.                     |
-| `plynth_version`    | string | The CLI version that produced the payload, from `importlib.metadata`.                  |
+| `plynth_version`    | string | The installed CLI version, from `importlib.metadata.version("plynth")` (`"0.0.0"` if metadata is unavailable). |
 | `plan`              | object | The full `ExecutionPlan` (Pydantic `model_dump(mode="json")`).                         |
 | `api_call_estimate` | object | Per-category counts plus a `total`; matches the figures in the text dry-run footer.    |
 
