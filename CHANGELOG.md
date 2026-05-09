@@ -48,6 +48,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   installation tokens and user access tokens) is documented as a
   bring-your-own-token path; the CLI does not bootstrap either flow
   itself.
+- **SECURITY.md** now notes that the documented fine-grained PAT
+  permission set was confirmed against GHES 3.19 in 2026-05.
 
 ---
 
