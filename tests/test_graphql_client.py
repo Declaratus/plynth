@@ -144,6 +144,123 @@ def test_graphql_error_response_raises() -> None:
         _client().get_org_id("nope")
 
 
+# ── #14: configurable Status field ────────────────────────────────
+
+
+@responses.activate
+def test_supports_status_overwrite_true_when_input_field_present() -> None:
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        json={
+            "data": {
+                "__type": {
+                    "inputFields": [
+                        {"name": "fieldId"},
+                        {"name": "name"},
+                        {"name": "singleSelectOptions"},
+                        {"name": "iterationConfiguration"},
+                    ]
+                }
+            }
+        },
+        status=200,
+    )
+    assert _client().supports_status_overwrite() is True
+
+
+@responses.activate
+def test_supports_status_overwrite_false_on_pre_3_19_instance() -> None:
+    # Older instances expose UpdateProjectV2FieldInput without singleSelectOptions
+    # (or even with __type returning null if the input doesn't exist at all).
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        json={"data": {"__type": {"inputFields": [{"name": "fieldId"}, {"name": "name"}]}}},
+        status=200,
+    )
+    assert _client().supports_status_overwrite() is False
+
+
+@responses.activate
+def test_supports_status_overwrite_false_when_type_missing() -> None:
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        json={"data": {"__type": None}},
+        status=200,
+    )
+    assert _client().supports_status_overwrite() is False
+
+
+@responses.activate
+def test_update_field_options_returns_server_options() -> None:
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        json={
+            "data": {
+                "updateProjectV2Field": {
+                    "projectV2Field": {
+                        "id": "PVTSSF_1",
+                        "name": "Status",
+                        "options": [
+                            {"id": "abc", "name": "Triaged", "color": "GRAY"},
+                            {"id": "def", "name": "Done", "color": "GREEN"},
+                        ],
+                    }
+                }
+            }
+        },
+        status=200,
+    )
+    out = _client().update_field_options(
+        "PVTSSF_1",
+        [
+            {"name": "Triaged", "color": "GRAY", "description": ""},
+            {"name": "Done", "color": "GREEN", "description": ""},
+        ],
+    )
+    assert [o["name"] for o in out] == ["Triaged", "Done"]
+    # Server-issued option IDs round-trip back so the caller can wire them
+    # into project state without a follow-up re-query.
+    assert out[0]["id"] == "abc"
+
+
+@responses.activate
+def test_update_field_options_sends_options_in_input_order() -> None:
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        json={
+            "data": {
+                "updateProjectV2Field": {
+                    "projectV2Field": {"id": "PVTSSF_1", "name": "Status", "options": []}
+                }
+            }
+        },
+        status=200,
+    )
+    requested = [
+        {"name": "Triaged", "color": "GRAY", "description": ""},
+        {"name": "Spec'd", "color": "BLUE", "description": ""},
+        {"name": "Done", "color": "GREEN", "description": ""},
+    ]
+    _client().update_field_options("PVTSSF_1", requested)
+
+    sent = responses.calls[0].request
+    body_text = sent.body.decode() if isinstance(sent.body, bytes) else sent.body
+    payload = json.loads(body_text)
+    # Plynth's promise of "order matches template" depends on the request
+    # body preserving order — pin it so a future refactor that hands options
+    # off to a set/dict-keyed structure trips this test.
+    assert [o["name"] for o in payload["variables"]["options"]] == [
+        "Triaged",
+        "Spec'd",
+        "Done",
+    ]
+
+
 @responses.activate
 def test_request_body_includes_query_and_variables() -> None:
     responses.add(

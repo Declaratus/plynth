@@ -64,7 +64,7 @@ class ExecutionPlan(BaseModel):
     project_description: str
     
     # Resolved resources
-    status_options: list[StatusOption]       # From template, unchanged
+    status_options: list[ResolvedFieldOption]  # From template, placeholder-resolved (drives updateProjectV2Field on system Status)
     fields: list[ResolvedField]
     milestones: list[ResolvedMilestone]
     issues: list[ResolvedIssue]

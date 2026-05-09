@@ -14,7 +14,7 @@ from plynth.models.plan import (
     ResolvedIssue,
     ResolvedMilestone,
 )
-from plynth.models.template import TemplateDefinition
+from plynth.models.template import FieldOption, TemplateDefinition
 
 # Stable schema version for the JSON dry-run payload. Bump on
 # breaking shape changes; document in docs/dry-run-json.md.
@@ -166,19 +166,32 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
     # ── Step 6: Resolve field options ──────────────────────────────
     # Color is validated against OptionColor at template parse time, so any
     # color reaching here is already legal. None means "operator left it off"
-    # which we materialize as GRAY for the GraphQL mutation.
-    resolved_field_defs: list[ResolvedField] = []
-    for f in template.fields:
-        opts = [
+    # which we materialize as GRAY for the GraphQL mutation. Status options
+    # use the same shape: planner-side they go through the same placeholder
+    # resolution, engine-side they feed the same ProjectV2SingleSelectField
+    # option list (via updateProjectV2Field on the system Status field).
+    def _resolve_options(options: list[FieldOption]) -> list[ResolvedFieldOption]:
+        return [
             ResolvedFieldOption(
                 value=resolve_placeholders(opt.value, values),
                 color=opt.color or "GRAY",
                 description=resolve_placeholders(opt.description, values),
                 default=opt.default,
             )
-            for opt in f.options
+            for opt in options
         ]
-        resolved_field_defs.append(ResolvedField(id=f.id, name=f.name, type=f.type, options=opts))
+
+    resolved_status = _resolve_options(template.status)
+    if resolved_status and not any(opt.default for opt in resolved_status):
+        warnings.append(
+            f"status: no option marked default: true; "
+            f"new items will receive '{resolved_status[0].value}' (the first option)"
+        )
+
+    resolved_field_defs: list[ResolvedField] = [
+        ResolvedField(id=f.id, name=f.name, type=f.type, options=_resolve_options(f.options))
+        for f in template.fields
+    ]
 
     # ── Step 7: Enforce allow_unknown_values guard ─────────────────
     # For single-select fields where allow_unknown_values is false (the
@@ -216,7 +229,7 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
         target=instance.target,
         project_name=instance.project.name,
         project_description=project_desc,
-        status_options=list(template.status),
+        status_options=resolved_status,
         fields=resolved_field_defs,
         milestones=resolved_milestones,
         issues=resolved_issues,
@@ -281,6 +294,20 @@ def format_dry_run(ep: ExecutionPlan) -> str:
         bl_str = ", ".join(bl_parts) if bl_parts else "(none)"
         w(f"       blocked_by: {bb_str} | blocks: {bl_str}")
     w("")
+
+    # Status (only when configured; empty means "keep GitHub defaults")
+    if ep.status_options:
+        default_value = next((o.value for o in ep.status_options if o.default), None)
+        suffix = (
+            f", default: {default_value}"
+            if default_value
+            else f", default: {ep.status_options[0].value} (first option, no default declared)"
+        )
+        w(f"Status options ({len(ep.status_options)}{suffix}):")
+        for opt in ep.status_options:
+            mark = " *" if opt.default else ""
+            w(f"  {opt.value} [{opt.color}]{mark}")
+        w("")
 
     # Fields
     w(f"Fields ({len(ep.fields)}):")

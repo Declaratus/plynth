@@ -247,6 +247,56 @@ def test_plan_unknown_value_via_instance_override_rejected(
         plan(minimal_template, minimal_instance)
 
 
+# ── #14: configurable Status field ────────────────────────────────
+
+
+def test_plan_status_options_carry_through_with_color_and_default(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    ep = plan(minimal_template, minimal_instance)
+    # Fixture: Todo (default), Done.
+    assert [o.value for o in ep.status_options] == ["Todo", "Done"]
+    assert ep.status_options[0].default is True
+    assert ep.status_options[0].color == "GRAY"
+    assert ep.status_options[1].default is False
+    # Status options share ResolvedFieldOption with custom fields.
+    from plynth.models.plan import ResolvedFieldOption
+
+    assert all(isinstance(o, ResolvedFieldOption) for o in ep.status_options)
+
+
+def test_plan_status_resolves_placeholders(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.status[0].value = "{TEAM} Triaged"
+    ep = plan(minimal_template, minimal_instance)
+    assert ep.status_options[0].value == "Platform Triaged"
+
+
+def test_plan_status_no_default_emits_warning(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    for opt in minimal_template.status:
+        opt.default = False
+    ep = plan(minimal_template, minimal_instance)
+    assert any("no option marked default" in w for w in ep.warnings)
+
+
+def test_plan_status_with_default_no_warning(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    ep = plan(minimal_template, minimal_instance)
+    assert not any("default: true" in w for w in ep.warnings)
+
+
+def test_plan_empty_status_means_keep_github_defaults(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.status = []
+    ep = plan(minimal_template, minimal_instance)
+    assert ep.status_options == []
+
+
 # ── M2: JSON dry-run output ───────────────────────────────────────
 
 

@@ -52,6 +52,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   error, malformed response) log a warning and leave the version as
   `None`; nothing fails. Prepares the ground for view-API gating
   (GHES 3.20+) once view automation lands.
+- **Configurable Status field options** (#14). The template-level `status:`
+  block, previously parsed but inert, now drives the project's built-in
+  Status field. plynth overwrites GitHub's defaults (Backlog/Ready/In
+  progress/In review/Done) with the declared list during Phase 1, in the
+  order given. `default: true` on one option picks what new items receive
+  in Phase 4, replacing the hard-coded `Backlog` lookup. Omitting the block
+  keeps GitHub's defaults exactly as before. Status options share the rich
+  `FieldOption` shape introduced in #42 (color, description, default,
+  aliases, deprecated); the older `StatusOption` model is removed.
+  Requires GHES 3.19+ (the `singleSelectOptions` field on
+  `UpdateProjectV2FieldInput` shipped in cloud on 2024-12-12); plynth
+  introspects the schema at the start of Phase 1 and fails with a clear
+  message on older instances. Templates without a `status:` block run on
+  any GHES version plynth otherwise supports. Verified end-to-end against
+  GHES 3.19.4 — the public GraphQL mutation accepts the system Status
+  field and preserves input order (the in-UI Projects settings flow
+  re-sequences, but the API path does not).
 - **Repo creation when `repo.create: true`** (#13). With `repo.create: true`
   in the instance config, Phase 1 creates the target repository (private)
   via REST before resolving its node ID, instead of failing with

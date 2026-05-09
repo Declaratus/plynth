@@ -16,6 +16,18 @@ query GetRepoId($owner: String!, $name: String!) {
 }
 """
 
+# Probes whether the GHES build supports configurable Status options
+# (i.e. ``UpdateProjectV2FieldInput`` carries ``singleSelectOptions``).
+# Cheaper and more durable than parsing the GHES version: a 3.19 patch
+# release that regressed the input field would still fail this introspection.
+INTROSPECT_UPDATE_FIELD_INPUT = """
+query IntrospectUpdateFieldInput {
+  __type(name: "UpdateProjectV2FieldInput") {
+    inputFields { name }
+  }
+}
+"""
+
 GET_PROJECT_FIELDS = """
 query GetProjectFields($projectId: ID!) {
   node(id: $projectId) {
