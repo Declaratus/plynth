@@ -110,7 +110,7 @@ class RESTClient:
             if response.status_code == 401:
                 raise AuthError(
                     f"Token rejected by {self.base.display_target}; creating a repo "
-                    f"requires `repo` (classic) or organization Administration: write "
+                    f"requires `repo` (classic) or organization Administration: Read and write "
                     f"(fine-grained)."
                 )
             if response.status_code == 404:
