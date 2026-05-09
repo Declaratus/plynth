@@ -106,6 +106,12 @@ class GraphQLClient:
         )
         return data["createProjectV2"]["projectV2"]
 
+    # CRITICAL: ProjectV2 single-select option mutations (this method on
+    # create, plus any future updateProjectV2Field-style call) replace the
+    # full options list. Any option omitted from the input is DELETED, along
+    # with all option_id-bearing field values on items that pointed to it.
+    # Reconciliation must read-modify-write: read existing options, merge
+    # changes into the full list, then write. Never pass a partial list.
     def create_field(
         self,
         project_id: str,

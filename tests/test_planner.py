@@ -52,8 +52,9 @@ def test_plan_resolves_team_placeholder_in_field_options(
 ) -> None:
     ep = plan(minimal_template, minimal_instance)
     priority = next(f for f in ep.fields if f.id == "priority")
-    assert "Platform" in priority.options
-    assert "{TEAM}" not in priority.options
+    values = [opt.value for opt in priority.options]
+    assert "Platform" in values
+    assert all("{TEAM}" not in v for v in values)
 
 
 def test_plan_preserves_crossrefs_in_bodies(
@@ -121,3 +122,116 @@ def test_format_dry_run_shape(
     assert "Milestones" in output
     assert "Issues" in output
     assert "Fields" in output
+
+
+# ── M1-A: rich field option resolution ────────────────────────────
+
+
+def test_plan_rich_field_options_carry_color_and_description(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.fields[0].options[0].color = "RED"
+    minimal_template.fields[0].options[0].description = "Critical"
+    ep = plan(minimal_template, minimal_instance)
+    priority = next(f for f in ep.fields if f.id == "priority")
+    first = priority.options[0]
+    assert first.color == "RED"
+    assert first.description == "Critical"
+
+
+def test_plan_known_color_unchanged(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.fields[0].options[0].color = "PURPLE"
+    ep = plan(minimal_template, minimal_instance)
+    priority = next(f for f in ep.fields if f.id == "priority")
+    assert priority.options[0].color == "PURPLE"
+
+
+def test_plan_omitted_color_materializes_as_gray(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    # Templates can leave color unset (None). The engine materializes None
+    # as GRAY for the GraphQL mutation, which expects a concrete color.
+    assert minimal_template.fields[0].options[0].color is None
+    ep = plan(minimal_template, minimal_instance)
+    priority = next(f for f in ep.fields if f.id == "priority")
+    assert priority.options[0].color == "GRAY"
+
+
+# ── M1-B: template defaults precedence ────────────────────────────
+
+
+def test_plan_template_defaults_applied_when_issue_omits(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.defaults.fields = {"priority": "P2"}
+    # Strip the per-issue priority on the first issue so the default kicks in.
+    minimal_template.issues[0].fields = {}
+    ep = plan(minimal_template, minimal_instance)
+    first = next(i for i in ep.issues if i.template_id == minimal_template.issues[0].template_id)
+    assert first.fields.get("priority") == "P2"
+
+
+def test_plan_per_issue_field_wins_over_template_default(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.defaults.fields = {"priority": "P2"}
+    minimal_template.issues[0].fields = {"priority": "P1"}
+    ep = plan(minimal_template, minimal_instance)
+    first = next(i for i in ep.issues if i.template_id == minimal_template.issues[0].template_id)
+    assert first.fields.get("priority") == "P1"
+
+
+def test_plan_instance_override_wins_over_per_issue_and_defaults(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.defaults.fields = {"priority": "P2"}
+    minimal_template.issues[0].fields = {"priority": "P1"}
+    tid = minimal_template.issues[0].template_id
+    minimal_instance.field_overrides = {tid: {"priority": "Platform"}}
+    ep = plan(minimal_template, minimal_instance)
+    first = next(i for i in ep.issues if i.template_id == tid)
+    assert first.fields.get("priority") == "Platform"
+
+
+# ── M1-A: allow_unknown_values guard at plan time ──────────────────
+
+
+def test_plan_unknown_field_value_rejected_by_default(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    # priority field defaults to allow_unknown_values=False; "Bogus" isn't
+    # in the declared option set, so plan-time validation should fail.
+    minimal_template.issues[0].fields = {"priority": "Bogus"}
+    with pytest.raises(ValueError, match="not a declared option"):
+        plan(minimal_template, minimal_instance)
+
+
+def test_plan_unknown_field_value_allowed_when_allow_unknown_values_true(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    priority = next(f for f in minimal_template.fields if f.id == "priority")
+    priority.allow_unknown_values = True
+    minimal_template.issues[0].fields = {"priority": "Bogus"}
+    ep = plan(minimal_template, minimal_instance)
+    first = next(i for i in ep.issues if i.template_id == minimal_template.issues[0].template_id)
+    assert first.fields["priority"] == "Bogus"
+
+
+def test_plan_unknown_value_via_template_default_rejected(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    minimal_template.defaults.fields = {"priority": "Nope"}
+    minimal_template.issues[0].fields = {}
+    with pytest.raises(ValueError, match="not a declared option"):
+        plan(minimal_template, minimal_instance)
+
+
+def test_plan_unknown_value_via_instance_override_rejected(
+    minimal_template: TemplateDefinition, minimal_instance: InstanceConfig
+) -> None:
+    tid = minimal_template.issues[0].template_id
+    minimal_instance.field_overrides = {tid: {"priority": "BadOverride"}}
+    with pytest.raises(ValueError, match="not a declared option"):
+        plan(minimal_template, minimal_instance)

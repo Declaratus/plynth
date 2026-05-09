@@ -81,10 +81,18 @@ fields:
   - id: priority
     name: "Priority"
     type: single_select
+    # Rich option objects carry color/description/default at bootstrap time.
+    # Plain strings still work (see workstream above) — they get GRAY by default.
+    # See docs/options.md for the full option schema.
     options:
-      - "P1 -- Critical Path"
-      - "P2 -- Important"
-      - "P3 -- When Capacity Allows"
+      - value: "P1 -- Critical Path"
+        color: RED
+        description: "Blocks downstream milestones if it slips."
+      - value: "P2 -- Important"
+        color: YELLOW
+        description: "Drive to closure within the milestone."
+        default: true
+      - "P3 -- When Capacity Allows"   # legacy string form, still valid
 
   - id: owner
     name: "Owner"

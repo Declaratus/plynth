@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from plynth.models.template import StatusOption, ViewDefinition
+from plynth.models.template import OptionColor, StatusOption, ViewDefinition
 
 
 class ResolvedIssue(BaseModel):
@@ -32,6 +32,17 @@ class ResolvedMilestone(BaseModel):
     due_date: str | None = None
 
 
+class ResolvedFieldOption(BaseModel):
+    """A single-select option after placeholder resolution and color pre-flight."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: str
+    color: OptionColor = "GRAY"
+    description: str = ""
+    default: bool = False
+
+
 class ResolvedField(BaseModel):
     """A field with placeholder-resolved options."""
 
@@ -40,7 +51,7 @@ class ResolvedField(BaseModel):
     id: str
     name: str
     type: str
-    options: list[str]
+    options: list[ResolvedFieldOption]
 
 
 class ExecutionPlan(BaseModel):

@@ -7,6 +7,7 @@ from plynth.models.instance import InstanceConfig
 from plynth.models.plan import (
     ExecutionPlan,
     ResolvedField,
+    ResolvedFieldOption,
     ResolvedIssue,
     ResolvedMilestone,
 )
@@ -107,8 +108,12 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
     # ── Step 4 & 5: Resolve placeholders + trim deps ──────────────
     resolved_issues: list[ResolvedIssue] = []
     for issue in effective_issues:
-        # Apply field overrides before resolution
-        fields = dict(issue.fields)
+        # Field precedence: template defaults → per-issue → instance overrides.
+        # Last writer wins per key. Instance overrides remain top precedence so
+        # operators can still patch a single instance without editing the template.
+        fields: dict[str, str] = {}
+        fields.update(template.defaults.fields)
+        fields.update(issue.fields)
         if issue.template_id in instance.field_overrides:
             fields.update(instance.field_overrides[issue.template_id])
 
@@ -152,15 +157,44 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
         )
 
     # ── Step 6: Resolve field options ──────────────────────────────
-    resolved_field_defs = [
-        ResolvedField(
-            id=f.id,
-            name=f.name,
-            type=f.type,
-            options=[resolve_placeholders(opt, values) for opt in f.options],
-        )
-        for f in template.fields
-    ]
+    # Color is validated against OptionColor at template parse time, so any
+    # color reaching here is already legal. None means "operator left it off"
+    # which we materialize as GRAY for the GraphQL mutation.
+    resolved_field_defs: list[ResolvedField] = []
+    for f in template.fields:
+        opts = [
+            ResolvedFieldOption(
+                value=resolve_placeholders(opt.value, values),
+                color=opt.color or "GRAY",
+                description=resolve_placeholders(opt.description, values),
+                default=opt.default,
+            )
+            for opt in f.options
+        ]
+        resolved_field_defs.append(ResolvedField(id=f.id, name=f.name, type=f.type, options=opts))
+
+    # ── Step 7: Enforce allow_unknown_values guard ─────────────────
+    # For single-select fields where allow_unknown_values is false (the
+    # default), every resolved issue field value must match a declared
+    # option. Catching this at plan time turns drift into a hard error
+    # instead of a silent runtime skip in Phase 4.
+    strict_field_options: dict[str, set[str]] = {}
+    for tmpl_field, rf in zip(template.fields, resolved_field_defs):
+        if tmpl_field.type == "single_select" and not tmpl_field.allow_unknown_values:
+            strict_field_options[tmpl_field.id] = {opt.value for opt in rf.options}
+
+    unknown_value_errors: list[str] = []
+    for r_issue in resolved_issues:
+        for field_key, value in r_issue.fields.items():
+            allowed = strict_field_options.get(field_key)
+            if allowed is not None and value not in allowed:
+                unknown_value_errors.append(
+                    f"Issue {r_issue.template_id}: field '{field_key}' value "
+                    f"'{value}' is not a declared option. Add the value to the "
+                    f"field's options, or set allow_unknown_values: true on the field."
+                )
+    if unknown_value_errors:
+        raise ValueError("Field value validation failed:\n  " + "\n  ".join(unknown_value_errors))
 
     # ── Step 8: Resolve project description ({DATE}) ──────────────
     project_desc = instance.project.description.replace("{DATE}", date.today().isoformat())
@@ -243,7 +277,9 @@ def format_dry_run(ep: ExecutionPlan) -> str:
     # Fields
     w(f"Fields ({len(ep.fields)}):")
     for f in ep.fields:
-        w(f"  {f.id}: {f.name} [{f.type}] ({len(f.options)} options)")
+        n_colored = sum(1 for o in f.options if o.color != "GRAY")
+        suffix = f", {n_colored} colored" if n_colored else ""
+        w(f"  {f.id}: {f.name} [{f.type}] ({len(f.options)} options{suffix})")
     w("")
 
     # Warnings

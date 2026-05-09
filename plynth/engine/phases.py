@@ -127,7 +127,8 @@ class PhaseOrchestrator:
         for field in self.plan.fields:
             if field.type == "single_select":
                 options = [
-                    {"name": opt, "color": "GRAY", "description": ""} for opt in field.options
+                    {"name": opt.value, "color": opt.color, "description": opt.description}
+                    for opt in field.options
                 ]
                 self.gql.create_field(
                     project_id=self.state.project.node_id,
