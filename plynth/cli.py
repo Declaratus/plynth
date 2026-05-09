@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from plynth.engine.api_base import GitHubClient
 from plynth.engine.graphql_client import GraphQLClient
 from plynth.engine.phases import PhaseOrchestrator
-from plynth.engine.planner import format_dry_run, plan
+from plynth.engine.planner import format_dry_run, format_dry_run_json, plan
 from plynth.engine.rest_client import RESTClient
 from plynth.errors import ConfigError, PlynthError
 from plynth.models.instance import InstanceConfig
@@ -75,6 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--instance", required=True, help="Path to instance config YAML")
     create_parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without executing"
+    )
+    create_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Dry-run output format (default: text). 'json' emits a stable "
+        "schema documented in docs/dry-run-json.md.",
     )
     create_parser.add_argument(
         "--token",
@@ -150,7 +157,10 @@ def _cmd_create(args: argparse.Namespace, log: logging.Logger) -> None:
 
     # 3. Dry run?
     if args.dry_run:
-        print(format_dry_run(execution_plan))
+        if args.format == "json":
+            print(format_dry_run_json(execution_plan))
+        else:
+            print(format_dry_run(execution_plan))
         return
 
     # 4. Get token

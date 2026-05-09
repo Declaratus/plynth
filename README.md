@@ -240,9 +240,11 @@ Build in this order. Each step should be testable independently.
    - Resume logic: check state file phases, skip completed phases
 
 6. **CLI** (`cli.py`)
-   - `plynth create --template <path> --instance <path> [--dry-run]`
+   - `plynth create --template <path> --instance <path> [--dry-run [--format text|json]]`
    - `plynth resolve --state <path>` (re-run Phase 5 only)
    - Auth via `PLYNTH_TOKEN` env var or `--token` flag
+   - JSON dry-run: stable schema for piping plans into other tools.
+     See [docs/dry-run-json.md](docs/dry-run-json.md).
 
 ## What NOT to build in Phase B
 
@@ -262,5 +264,7 @@ Browse open issues by area:
 - [Good first issues](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22good-first-issue%22)
 - [Help wanted](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22help-wanted%22)
 
-Recent themes: github.com support and PyPI publishing (v0.3.0); drift
-detection, JSON dry-run output, and a GitHub Action wrapper (post-0.3).
+Recent themes: github.com support and PyPI publishing (v0.3.0); rich
+field options, repo creation, GHES version detection, and JSON
+dry-run output (v0.4.0); drift detection and a GitHub Action wrapper
+remain on the post-0.4 list.
