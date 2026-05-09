@@ -64,6 +64,7 @@ class ExecutionPlan(BaseModel):
     template_version: str
     instance_org: str
     instance_repo: str
+    instance_repo_create: bool = False
     target: str
     project_name: str
     project_description: str
