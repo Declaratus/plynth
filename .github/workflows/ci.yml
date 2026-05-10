@@ -70,3 +70,25 @@ jobs:
           ignore-vulns: |
             CVE-2026-3219
             CVE-2026-6357
+
+  # Single aggregate check that the org-level branch ruleset can require
+  # by name. `if: always()` is load-bearing: without it, a failed/skipped
+  # upstream job leaves this one "skipped", which counts as a pass on a
+  # required check. Explicit per-need result comparison rather than
+  # `contains(needs.*.result, 'failure')` so cancelled or skipped legs
+  # also fail the gate. See Declaratus/governance spec 01 risk #3 and
+  # RUNBOOKS/ruleset-rollout.md § Status checks.
+  ci-summary:
+    name: ci-summary
+    needs: [test, audit]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs succeeded
+        run: |
+          test_result='${{ needs.test.result }}'
+          audit_result='${{ needs.audit.result }}'
+          echo "test=$test_result audit=$audit_result"
+          if [ "$test_result" != "success" ] || [ "$audit_result" != "success" ]; then
+            exit 1
+          fi
