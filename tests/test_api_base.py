@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 import responses
 
-from plynth.engine.api_base import GHESClient, GitHubClient
+from plynth.engine.api_base import GHESClient, GitHubClient, is_rate_limited_403
 
 
 def test_auth_header_set() -> None:
@@ -203,3 +203,123 @@ def test_handle_retry_returns_false_on_200() -> None:
         return client._handle_retry(r, attempt=0)
 
     assert _do() is False
+
+
+# ── 403 retry policy (#41) ─────────────────────────────────────
+#
+# GitHub uses 403 for both rate-limit / abuse detection (retryable) and
+# permission denial (not retryable). The retry helper only retries 403s that
+# carry one of the canonical rate-limit signals; everything else falls
+# through so the caller can raise AuthError.
+
+
+def test_handle_retry_403_with_retry_after_retries() -> None:
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+
+    @responses.activate
+    def _do() -> bool:
+        responses.add(
+            responses.GET,
+            "https://ghes.example.com/api/test",
+            status=403,
+            headers={"Retry-After": "0"},
+        )
+        r = client.session.get("https://ghes.example.com/api/test")
+        with patch("plynth.engine.api_base.time.sleep"):
+            return client._handle_retry(r, attempt=0)
+
+    assert _do() is True
+
+
+def test_handle_retry_403_with_zero_rate_limit_remaining_retries() -> None:
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+
+    @responses.activate
+    def _do() -> bool:
+        responses.add(
+            responses.GET,
+            "https://ghes.example.com/api/test",
+            status=403,
+            headers={"X-RateLimit-Remaining": "0"},
+        )
+        r = client.session.get("https://ghes.example.com/api/test")
+        with patch("plynth.engine.api_base.time.sleep"):
+            return client._handle_retry(r, attempt=0)
+
+    assert _do() is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.",
+        "You have triggered an abuse detection mechanism. Please wait a few minutes before you try again.",
+    ],
+)
+def test_handle_retry_403_with_rate_limit_body_message_retries(message: str) -> None:
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+
+    @responses.activate
+    def _do() -> bool:
+        responses.add(
+            responses.GET,
+            "https://ghes.example.com/api/test",
+            status=403,
+            json={"message": message},
+        )
+        r = client.session.get("https://ghes.example.com/api/test")
+        with patch("plynth.engine.api_base.time.sleep"):
+            return client._handle_retry(r, attempt=0)
+
+    assert _do() is True
+
+
+def test_handle_retry_403_permission_denied_returns_false() -> None:
+    """No rate-limit signals → permission denial. Don't sleep, don't retry."""
+    client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+
+    @responses.activate
+    def _do() -> bool:
+        responses.add(
+            responses.GET,
+            "https://ghes.example.com/api/test",
+            status=403,
+            json={"message": "Resource not accessible by integration"},
+        )
+        r = client.session.get("https://ghes.example.com/api/test")
+        with patch("plynth.engine.api_base.time.sleep") as mock_sleep:
+            should_retry = client._handle_retry(r, attempt=0)
+            mock_sleep.assert_not_called()
+        return should_retry
+
+    assert _do() is False
+
+
+@pytest.mark.parametrize(
+    "headers,body,expected",
+    [
+        ({"Retry-After": "5"}, None, True),
+        ({"X-RateLimit-Remaining": "0"}, None, True),
+        ({"X-RateLimit-Remaining": "42"}, None, False),
+        ({}, {"message": "You have exceeded a secondary rate limit."}, True),
+        ({}, {"message": "abuse detection mechanism triggered"}, True),
+        ({}, {"message": "Resource not accessible by integration"}, False),
+        ({}, None, False),
+    ],
+)
+def test_is_rate_limited_403_signal_matrix(
+    headers: dict[str, str], body: dict | None, expected: bool
+) -> None:
+    """Single source of truth for the retry-vs-deny decision rule."""
+
+    @responses.activate
+    def _do() -> bool:
+        kwargs: dict = {"status": 403, "headers": headers}
+        if body is not None:
+            kwargs["json"] = body
+        responses.add(responses.GET, "https://ghes.example.com/api/test", **kwargs)
+        client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
+        r = client.session.get("https://ghes.example.com/api/test")
+        return is_rate_limited_403(r)
+
+    assert _do() is expected
