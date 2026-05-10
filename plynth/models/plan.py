@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from plynth.models.template import OptionColor, StatusOption, ViewDefinition
+from plynth.models.template import OptionColor, ViewDefinition
 
 
 class ResolvedIssue(BaseModel):
@@ -69,8 +69,10 @@ class ExecutionPlan(BaseModel):
     project_name: str
     project_description: str
 
-    # Resolved resources
-    status_options: list[StatusOption]
+    # Resolved resources. Status options share ResolvedFieldOption with
+    # custom fields: they go through the same placeholder + color pre-flight,
+    # and the engine consumes the same shape when calling updateProjectV2Field.
+    status_options: list[ResolvedFieldOption]
     fields: list[ResolvedField]
     milestones: list[ResolvedMilestone]
     issues: list[ResolvedIssue]

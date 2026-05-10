@@ -20,7 +20,7 @@ placeholders:
     required: false
 
 status:
-  - {value: "Todo", color: "GRAY"}
+  - {value: "Todo", color: "GRAY", default: true}
   - {value: "Done", color: "GREEN"}
 
 fields:

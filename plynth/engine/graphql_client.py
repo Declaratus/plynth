@@ -137,6 +137,45 @@ class GraphQLClient:
         data = self.execute(mutations.CREATE_FIELD, variables, is_mutation=True)
         return data["createProjectV2Field"]["projectV2Field"]
 
+    def supports_status_overwrite(self) -> bool:
+        """Return True iff the target's UpdateProjectV2FieldInput carries
+        ``singleSelectOptions``.
+
+        Cloud added it on 2024-12-12 and GHES 3.19+ ships it. The probe is a
+        plain GraphQL introspection — works without project scopes — so it can
+        front-run the actual mutation and turn an unsupported instance into a
+        clear "needs 3.19+" error rather than a 422 during Phase 1.
+        """
+        data = self.execute(queries.INTROSPECT_UPDATE_FIELD_INPUT)
+        type_info = data.get("__type") or {}
+        input_fields = type_info.get("inputFields") or []
+        return any(f.get("name") == "singleSelectOptions" for f in input_fields)
+
+    # CRITICAL: same replace-the-list semantics as ``create_field``. Whatever
+    # ``options`` you pass becomes the new option list verbatim — anything
+    # omitted is deleted, and any item value pointing at a deleted option is
+    # cleared. Plynth's Phase 1 calls this before any items exist on the
+    # project, so nothing is at risk; reconciliation paths must read the
+    # existing options and merge before writing.
+    def update_field_options(self, field_id: str, options: list[dict]) -> list[dict]:
+        """Overwrite the option list on an existing single-select field.
+
+        ``options`` items are ``{"name", "color", "description"}`` dicts in
+        the order the operator wants them displayed (the GraphQL mutation
+        preserves input order on the system Status field, verified against
+        GHES 3.19.4 — see canary in ``.import/single-select-research/``).
+
+        Returns the server's new option list, including freshly-issued
+        option IDs. Callers should consume these directly rather than
+        re-querying — option IDs rotate on every overwrite.
+        """
+        data = self.execute(
+            mutations.UPDATE_FIELD_OPTIONS,
+            {"fieldId": field_id, "options": options},
+            is_mutation=True,
+        )
+        return data["updateProjectV2Field"]["projectV2Field"].get("options", [])
+
     def get_project_fields(self, project_id: str) -> list[dict]:
         """Re-query all fields on a project to get field IDs and option IDs.
 

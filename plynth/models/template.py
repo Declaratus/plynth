@@ -28,20 +28,14 @@ class PlaceholderSpec(BaseModel):
     required: bool = True
 
 
-class StatusOption(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    value: str
-    color: Literal["GRAY", "BLUE", "YELLOW", "RED", "PURPLE", "GREEN"]
-
-
 class FieldOption(BaseModel):
     """Rich form of a single-select field option.
 
     Templates may declare options as plain strings (legacy) or as objects
     with color/description/default/aliases/deprecated. A field_validator on
     FieldDefinition.options normalizes strings to FieldOption(value=...) so
-    the engine sees one shape post-parse.
+    the engine sees one shape post-parse. The same shape powers the
+    template-level ``status:`` block (the project's built-in Status field).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -52,6 +46,26 @@ class FieldOption(BaseModel):
     default: bool = False
     aliases: list[Annotated[str, Field(max_length=100)]] = []
     deprecated: bool = False
+
+
+def _normalize_string_options(v: Any) -> Any:
+    """Coerce a list that may mix strings and dicts into a list of dicts.
+
+    Used by both ``FieldDefinition.options`` and ``TemplateDefinition.status``
+    so legacy string-only YAML keeps parsing while richer objects roundtrip.
+    """
+    if not isinstance(v, list):
+        return v
+    return [{"value": opt} if isinstance(opt, str) else opt for opt in v]
+
+
+def _check_at_most_one_default(options: list[FieldOption], context: str) -> None:
+    defaults = [opt.value for opt in options if opt.default]
+    if len(defaults) > 1:
+        raise ValueError(
+            f"{context}: at most one option may have default: true "
+            f"(found {len(defaults)}: {defaults})"
+        )
 
 
 class FieldDefinition(BaseModel):
@@ -66,19 +80,11 @@ class FieldDefinition(BaseModel):
     @field_validator("options", mode="before")
     @classmethod
     def _normalize_options(cls, v: Any) -> Any:
-        """Accept legacy string options or rich objects. Strings become FieldOption(value=...)."""
-        if not isinstance(v, list):
-            return v
-        return [{"value": opt} if isinstance(opt, str) else opt for opt in v]
+        return _normalize_string_options(v)
 
     @model_validator(mode="after")
     def _at_most_one_default(self) -> FieldDefinition:
-        defaults = [opt.value for opt in self.options if opt.default]
-        if len(defaults) > 1:
-            raise ValueError(
-                f"Field '{self.id}': at most one option may have default: true "
-                f"(found {len(defaults)}: {defaults})"
-            )
+        _check_at_most_one_default(self.options, f"Field '{self.id}'")
         return self
 
 
@@ -182,7 +188,7 @@ class TemplateDefinition(BaseModel):
     schema_version: str
     template: TemplateMetadata
     placeholders: dict[str, PlaceholderSpec] = {}
-    status: list[StatusOption] = []
+    status: list[FieldOption] = []
     fields: list[FieldDefinition] = []
     milestones: list[MilestoneDefinition] = []
     issues: list[IssueDefinition] = []
@@ -190,6 +196,16 @@ class TemplateDefinition(BaseModel):
     pruning: PruningConfig | None = None
     defaults: TemplateDefaults = Field(default_factory=TemplateDefaults)
     reconciliation: ReconciliationConfig = Field(default_factory=ReconciliationConfig)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, v: Any) -> Any:
+        return _normalize_string_options(v)
+
+    @model_validator(mode="after")
+    def _status_at_most_one_default(self) -> TemplateDefinition:
+        _check_at_most_one_default(self.status, "status")
+        return self
 
     @model_validator(mode="after")
     def _validate_references(self) -> TemplateDefinition:

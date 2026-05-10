@@ -24,12 +24,12 @@ from plynth.models.state import (
 )
 from plynth.models.template import (
     FieldDefinition,
+    FieldOption,
     IssueDefinition,
     MilestoneDefinition,
     PlaceholderSpec,
     PruningConfig,
     PruningRule,
-    StatusOption,
     TemplateDefinition,
     TemplateMetadata,
     ViewDefinition,
@@ -42,7 +42,7 @@ __all__ = [
     "TemplateDefinition",
     "TemplateMetadata",
     "PlaceholderSpec",
-    "StatusOption",
+    "FieldOption",
     "FieldDefinition",
     "MilestoneDefinition",
     "IssueDefinition",

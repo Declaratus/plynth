@@ -41,7 +41,7 @@ fields:
 | `value` | string (max 100) | required | Display name on the board. Placeholders resolved at plan time. |
 | `color` | enum | omitted (rendered GRAY) | One of GRAY, BLUE, YELLOW, RED, PURPLE, GREEN, ORANGE, PINK. Anything else fails template validation; add the value to `OptionColor` if a future GHES version introduces a new color. |
 | `description` | string (max 2000) | "" | Tooltip text shown on hover in the project board. |
-| `default` | bool | false | At most one option per field may be `default: true`. Reserved for future "set on item creation" behavior; currently informational. |
+| `default` | bool | false | At most one option per field may be `default: true`. On the `status:` block, controls what new items receive in Phase 4 (see [Status field](#status-field) below). Informational on custom fields until per-issue field defaults land. |
 | `aliases` | list[string] | [] | Reserved for future option-rename reconciliation. Currently informational. |
 | `deprecated` | bool | false | Marks an option as legacy. Currently informational. |
 
@@ -59,17 +59,25 @@ Pick colors per field as a categorical scale. Avoid two adjacent option values s
 - **gray** — neutral / N/A / not yet triaged
 - **blue / purple / orange / pink** — categorical distinctions where the semantics above don't apply
 
-A worked example for a Status field:
+## Status field
+
+The top-level `status:` block configures the project's built-in Status field. It accepts the same option shape as a custom field's `options:`, plus the `default: true` flag selects which option is applied to new items in Phase 4.
 
 ```yaml
 status:
-  - { value: "Backlog",     color: GRAY }
-  - { value: "Ready",       color: BLUE }
-  - { value: "In Progress", color: YELLOW }
-  - { value: "Blocked",     color: RED }
-  - { value: "In Review",   color: PURPLE }
+  - { value: "Triaged",     color: GRAY,   default: true }
+  - { value: "Spec'd",      color: BLUE }
+  - { value: "In progress", color: YELLOW }
+  - { value: "In review",   color: PURPLE }
   - { value: "Done",        color: GREEN }
 ```
+
+Behavior:
+
+- **Order is preserved.** plynth sends the list in declaration order and GHES 3.19+ honors it (verified end-to-end against the public `updateProjectV2Field` mutation; the in-UI Projects settings flow re-sequences, but the API path does not).
+- **Replace, not patch.** plynth overwrites GitHub's defaults (Backlog/Ready/In progress/In review/Done) wholesale. Safe at bootstrap because no items exist on the project yet — see "full-list replacements" below.
+- **Default selection.** Mark exactly one option `default: true` to pick what new items receive in Phase 4. If no option is marked, the planner emits a warning and falls back to the first option in display order. Omit the whole `status:` block to keep GitHub's defaults, in which case plynth applies `Backlog` to new items as it always has.
+- **GHES floor.** Configurable Status requires GHES 3.19+ (the `singleSelectOptions` field on `UpdateProjectV2FieldInput` shipped in cloud on 2024-12-12). plynth probes the schema at the start of Phase 1 and fails with a clear message on older instances. Templates without a `status:` block run on any GHES version plynth otherwise supports.
 
 ## Critical: option mutations are full-list replacements
 

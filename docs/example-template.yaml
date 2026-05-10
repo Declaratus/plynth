@@ -39,11 +39,18 @@ placeholders:
     required: true
 
 # ─── Status Field ────────────────────────────────────────────────────────────
-# Customizes the built-in Status field on the project board.
-# Option order is preserved (rendered left-to-right on the board).
+# Customizes the built-in Status field on the project board. Plynth
+# overwrites GitHub's default options (Backlog/Ready/In progress/In review/
+# Done) with the list below during Phase 1, before any items exist on the
+# project. Option order is preserved (rendered left-to-right on the board).
+# Mark exactly one option `default: true` to set what new items receive;
+# omitting it falls back to the first option, which the planner will warn
+# about. Requires GHES 3.19+; older instances fail loud at Phase 1 start.
+# Omit the block entirely to keep GitHub's defaults.
 status:
   - value: "Backlog"
     color: "GRAY"
+    default: true
   - value: "Ready"
     color: "BLUE"
   - value: "In Progress"

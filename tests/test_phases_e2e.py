@@ -49,11 +49,74 @@ class _GraphQLDispatcher:
         self.created_issue_node_ids: list[str] = []
         self.body_updates: list[tuple[str, str]] = []
         self.add_blocked_by_calls: list[tuple[str, str]] = []
+        self.update_field_options_calls: list[tuple[str, list[dict]]] = []
+        self.set_field_value_calls: list[dict] = []
+        # Tracks Status options the dispatcher should pretend live on the
+        # project. Mutated by updateProjectV2Field so a follow-up
+        # get_project_fields would see the new list (today the engine reads
+        # the mutation response directly, so this is belt-and-braces).
+        self.status_options: list[dict] = [
+            {"id": "opt_backlog", "name": "Backlog"},
+            {"id": "opt_done", "name": "Done"},
+        ]
 
     def __call__(self, request) -> tuple[int, dict, str]:  # type: ignore[no-untyped-def]
         payload = json.loads(request.body)
         query = payload["query"]
         variables = payload.get("variables", {})
+
+        if "__type(name:" in query and "UpdateProjectV2FieldInput" in query:
+            # GHES 3.19+ exposes singleSelectOptions on UpdateProjectV2FieldInput.
+            return (
+                200,
+                {},
+                json.dumps(
+                    {
+                        "data": {
+                            "__type": {
+                                "inputFields": [
+                                    {"name": "clientMutationId"},
+                                    {"name": "fieldId"},
+                                    {"name": "iterationConfiguration"},
+                                    {"name": "name"},
+                                    {"name": "singleSelectOptions"},
+                                ]
+                            }
+                        }
+                    }
+                ),
+            )
+
+        if "updateProjectV2Field(" in query:
+            self.update_field_options_calls.append((variables["fieldId"], variables["options"]))
+            # Server overwrites the option list and assigns fresh IDs in the
+            # order received. Plynth captures these directly from the response.
+            new_opts = [
+                {
+                    "id": f"opt_{opt['name'].lower().replace(' ', '_').replace(chr(39), '')}",
+                    "name": opt["name"],
+                    "color": opt.get("color", "GRAY"),
+                }
+                for opt in variables["options"]
+            ]
+            self.status_options = new_opts
+            return (
+                200,
+                {},
+                json.dumps(
+                    {
+                        "data": {
+                            "updateProjectV2Field": {
+                                "projectV2Field": {
+                                    "id": variables["fieldId"],
+                                    "name": "Status",
+                                    "options": new_opts,
+                                }
+                            }
+                        }
+                    }
+                ),
+            )
 
         if "GET_ORG_ID" in query or "organization(login" in query:
             return (200, {}, json.dumps({"data": {"organization": {"id": "O_1"}}}))
@@ -99,7 +162,10 @@ class _GraphQLDispatcher:
             )
 
         if "node(id:" in query and "ProjectV2" in query:
-            # get_project_fields — return Status (built-in) plus our custom fields.
+            # get_project_fields — return Status (built-in) with whatever the
+            # current overwrite state says, plus our custom fields. Phase 1d
+            # reads this *before* updateProjectV2Field, so on the first call
+            # status_options still carries the GH defaults.
             return (
                 200,
                 {},
@@ -112,10 +178,7 @@ class _GraphQLDispatcher:
                                         {
                                             "id": "PVTSSF_status",
                                             "name": "Status",
-                                            "options": [
-                                                {"id": "opt_backlog", "name": "Backlog"},
-                                                {"id": "opt_done", "name": "Done"},
-                                            ],
+                                            "options": list(self.status_options),
                                         },
                                         {
                                             "id": "PVTSSF_Priority",
@@ -167,6 +230,7 @@ class _GraphQLDispatcher:
             )
 
         if "updateProjectV2ItemFieldValue(" in query:
+            self.set_field_value_calls.append(variables)
             return (
                 200,
                 {},
@@ -249,10 +313,22 @@ def test_phases_e2e_happy_path(
     assert state.project.number == 7
     assert state.repo is not None
     assert state.repo.node_id == "R_1"
-    # Status field captured under the synthetic "_status" key
+    # Status field captured under the synthetic "_status" key. The fixture's
+    # status block (Todo + Done, Todo default) overwrote GH's defaults, so the
+    # state reflects the post-overwrite shape with server-issued option IDs.
     assert "_status" in state.fields
-    assert state.fields["_status"].options["Backlog"] == "opt_backlog"
+    assert set(state.fields["_status"].options.keys()) == {"Todo", "Done"}
+    assert state.fields["_status"].options["Todo"] == "opt_todo"
+    # The overwrite mutation ran exactly once and sent options in declaration order.
+    assert len(dispatcher.update_field_options_calls) == 1
+    sent_options = dispatcher.update_field_options_calls[0][1]
+    assert [o["name"] for o in sent_options] == ["Todo", "Done"]
     assert "priority" in state.fields
+    # Phase 4b set every item to the configured default ("Todo"), not the old
+    # hard-coded "Backlog".
+    status_writes = [c for c in dispatcher.set_field_value_calls if c["fieldId"] == "PVTSSF_status"]
+    assert len(status_writes) == len(state.issues)
+    assert all(c["value"]["singleSelectOptionId"] == "opt_todo" for c in status_writes)
 
     # Phase 2 — milestones via REST
     assert state.is_phase_complete(PHASE_2_MILESTONES)
@@ -309,7 +385,7 @@ def test_phases_e2e_happy_path(
     assert set(on_disk.issues.keys()) == {"001", "002", "003"}
     assert {iss.number for iss in on_disk.issues.values()} == {47, 48, 49}
     assert "_status" in on_disk.fields
-    assert on_disk.fields["_status"].options["Backlog"] == "opt_backlog"
+    assert on_disk.fields["_status"].options["Todo"] == "opt_todo"
     on_disk_edges = {(e.blocked, e.blocker) for e in on_disk.dependencies_created}
     assert on_disk_edges == {("002", "001"), ("003", "002")}
     for phase in (

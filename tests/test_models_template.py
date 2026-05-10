@@ -63,9 +63,21 @@ def test_extra_keys_rejected() -> None:
 
 def test_invalid_status_color_rejected() -> None:
     data = _base_template_dict()
-    data["status"][0]["color"] = "ORANGE"
+    data["status"][0]["color"] = "TEAL"
     with pytest.raises(ValidationError):
         TemplateDefinition.model_validate(data)
+
+
+def test_status_accepts_full_option_color_set() -> None:
+    """status: now uses FieldOption, so ORANGE and PINK are valid (not just
+    the six-color subset the dropped StatusOption model allowed)."""
+    data = _base_template_dict()
+    data["status"] = [
+        {"value": "Triaged", "color": "ORANGE"},
+        {"value": "Done", "color": "PINK"},
+    ]
+    t = TemplateDefinition.model_validate(data)
+    assert [o.color for o in t.status] == ["ORANGE", "PINK"]
 
 
 def test_pruning_unknown_trigger_rejected() -> None:
@@ -194,6 +206,50 @@ def test_template_defaults_unknown_field_key_rejected() -> None:
     data["defaults"] = {"fields": {"nope": "x"}}
     with pytest.raises(ValidationError, match="defaults.fields: key 'nope' not found"):
         TemplateDefinition.model_validate(data)
+
+
+# ── #14: configurable Status field ─────────────────────────────────
+
+
+def test_status_legacy_string_form_normalizes() -> None:
+    data = _base_template_dict()
+    data["status"] = ["Triaged", "Done"]
+    t = TemplateDefinition.model_validate(data)
+    assert [o.value for o in t.status] == ["Triaged", "Done"]
+    assert all(o.color is None for o in t.status)
+    assert all(o.default is False for o in t.status)
+
+
+def test_status_rich_form_roundtrips() -> None:
+    data = _base_template_dict()
+    data["status"] = [
+        {"value": "Triaged", "color": "GRAY", "default": True},
+        {"value": "Spec'd", "color": "BLUE", "description": "Acceptance written"},
+        "Done",  # mixing legacy strings allowed
+    ]
+    t = TemplateDefinition.model_validate(data)
+    assert [o.value for o in t.status] == ["Triaged", "Spec'd", "Done"]
+    assert t.status[0].default is True
+    assert t.status[1].description == "Acceptance written"
+    assert t.status[2].color is None
+
+
+def test_status_two_defaults_rejected() -> None:
+    data = _base_template_dict()
+    data["status"] = [
+        {"value": "Triaged", "default": True},
+        {"value": "Done", "default": True},
+    ]
+    with pytest.raises(ValidationError, match="at most one option may have default"):
+        TemplateDefinition.model_validate(data)
+
+
+def test_status_empty_list_is_valid() -> None:
+    """No status block (or empty) means 'keep GitHub defaults' — supported."""
+    data = _base_template_dict()
+    data["status"] = []
+    t = TemplateDefinition.model_validate(data)
+    assert t.status == []
 
 
 # ── M1-G: reconciliation namespace stub ────────────────────────────

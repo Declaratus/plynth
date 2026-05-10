@@ -30,6 +30,25 @@ mutation CreateField($projectId: ID!, $name: String!, $dataType: ProjectV2Custom
 }
 """
 
+# Overwrites the option list on an existing single-select field. Same
+# replace-the-list semantics as createProjectV2Field — see the CRITICAL
+# block above ``GraphQLClient.update_field_options``. Available on cloud
+# (since 2024-12-12) and GHES 3.19+; older instances 422 on the input
+# argument, which is why ``introspect_update_field_input`` runs first.
+UPDATE_FIELD_OPTIONS = """
+mutation UpdateFieldOptions($fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) {
+  updateProjectV2Field(input: {fieldId: $fieldId, singleSelectOptions: $options}) {
+    projectV2Field {
+      ... on ProjectV2SingleSelectField {
+        id
+        name
+        options { id name color }
+      }
+    }
+  }
+}
+"""
+
 CREATE_ISSUE = """
 mutation CreateIssue($repositoryId: ID!, $title: String!, $body: String!, $milestoneId: ID) {
   createIssue(input: {repositoryId: $repositoryId, title: $title, body: $body, milestoneId: $milestoneId}) {

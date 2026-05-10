@@ -109,6 +109,20 @@ class PhaseOrchestrator:
     def phase_1_create_project_and_fields(self) -> None:
         """Create project, custom fields, and resolve field/option IDs."""
 
+        # If the template configures custom Status options, gate on the
+        # GraphQL surface being present *before any side effects*. The probe
+        # is pure schema introspection and runs ahead of org/repo resolution
+        # so that a 3.18 instance never reaches `_resolve_repo_id()` (which
+        # creates the repo when `repo.create: true`) — no orphan repos and no
+        # orphan projects.
+        if self.plan.status_options and not self.gql.supports_status_overwrite():
+            raise PlynthError(
+                f"Target {self.gql.base.display_target} does not expose "
+                f"updateProjectV2Field.singleSelectOptions, so Status options "
+                f"cannot be configured. GHES 3.19+ is required. Remove the "
+                f"template's `status:` block to fall back to GitHub's defaults."
+            )
+
         # 1a. Resolve org and repo IDs
         org_id = self.gql.get_org_id(self.plan.instance_org)
         repo_id = self._resolve_repo_id()
@@ -141,6 +155,29 @@ class PhaseOrchestrator:
         # 1d. Re-query to get actual field IDs and option IDs
         raw_fields = self.gql.get_project_fields(self.state.project.node_id)
 
+        # 1e. Overwrite the system Status field's options if configured. Done
+        # before any items exist on the project, so the replace-the-list
+        # semantics of updateProjectV2Field cannot corrupt anything. The
+        # mutation response carries the new option IDs in the same order we
+        # sent — patch them straight back into `raw_fields` so the loop below
+        # treats Status uniformly with custom fields.
+        if self.plan.status_options:
+            status_raw = next((r for r in raw_fields if r.get("name") == "Status"), None)
+            if status_raw is None:
+                raise PlynthError(
+                    "Status field not present on freshly-created project. "
+                    "This is unexpected — open an issue with the project URL."
+                )
+            new_options = self.gql.update_field_options(
+                status_raw["id"],
+                [
+                    {"name": opt.value, "color": opt.color, "description": opt.description}
+                    for opt in self.plan.status_options
+                ],
+            )
+            status_raw["options"] = new_options
+            self.log.info(f"Configured Status field with {len(new_options)} custom options")
+
         for raw in raw_fields:
             matching = [f for f in self.plan.fields if f.name == raw.get("name")]
             if not matching:
@@ -163,6 +200,23 @@ class PhaseOrchestrator:
                     options_map[opt["name"]] = opt["id"]
 
             self.state.fields[field_def.id] = FieldState(node_id=raw["id"], options=options_map)
+
+    def _resolve_default_status_value(self) -> str:
+        """Pick the Status option to apply to new items.
+
+        Precedence: explicit ``default: true`` in template.status, then the
+        first option in display order, then the GitHub default ``Backlog``
+        when the template doesn't configure status at all. Always returns
+        a value — the option may not exist on the project (caller does the
+        ``options.get(...)`` lookup), but the desired value itself is
+        always known.
+        """
+        if not self.plan.status_options:
+            return "Backlog"
+        for opt in self.plan.status_options:
+            if opt.default:
+                return opt.value
+        return self.plan.status_options[0].value
 
     def _resolve_repo_id(self) -> str:
         """Look up the repo node ID, creating the repo first if configured.
@@ -247,16 +301,18 @@ class PhaseOrchestrator:
             )
             issue_state.item_id = item_id
 
-            # 4b. Set Status to "Backlog"
+            # 4b. Set Status to the configured default (or "Backlog" if the
+            # template doesn't configure status, matching the pre-#14
+            # behavior).
             if "_status" in self.state.fields:
                 status_field = self.state.fields["_status"]
-                backlog_option_id = status_field.options.get("Backlog")
-                if backlog_option_id:
+                option_id = status_field.options.get(self._resolve_default_status_value())
+                if option_id:
                     self.gql.set_field_value(
                         project_id=self.state.project.node_id,
                         item_id=item_id,
                         field_id=status_field.node_id,
-                        value={"singleSelectOptionId": backlog_option_id},
+                        value={"singleSelectOptionId": option_id},
                     )
 
             # 4c. Set custom field values
