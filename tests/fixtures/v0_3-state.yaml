@@ -1,9 +1,13 @@
 # Hand-written v0.3-era state fixture used by the schema_version compat-shim
-# regression test. Pre-M1 shape: no status_field_id, no schema_version on
-# nested submodels, only fields that shipped through v0.3.x.
+# regression test. Pre-M1 shape: no status_field_id, no fields introduced
+# in M1+ — only keys that shipped through v0.3.x.
 #
 # StateFile must round-trip this through model_validate / model_dump under
-# the current (M1+) schema without losing data or rejecting unknown keys.
+# the current (M1+) schema without losing data. Every key here exists on
+# the current models (StateFile and its submodels are configured with
+# extra="forbid", so unknown keys would still be rejected); the round-trip
+# property under test is that M1+ keys absent from a v0.3 file zero-fill
+# cleanly via pydantic field defaults.
 
 schema_version: "1.0"
 created_at: "2026-05-01T10:00:00+00:00"
