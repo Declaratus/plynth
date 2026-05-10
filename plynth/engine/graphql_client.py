@@ -78,9 +78,7 @@ class GraphQLClient:
 
             if response.status_code == 403 and not is_rate_limited_403(response):
                 operation = "GraphQL mutation" if is_mutation else "GraphQL query"
-                raise AuthError(
-                    permission_denied_message(self.base.display_target, operation)
-                )
+                raise AuthError(permission_denied_message(self.base.display_target, operation))
 
             if not self.base._handle_retry(response, attempt):
                 response.raise_for_status()
