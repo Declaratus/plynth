@@ -24,6 +24,20 @@ def _rest() -> RESTClient:
     return RESTClient(GitHubClient(GHES_URL, "tok", write_delay_ms=0))
 
 
+def _assert_token_rejected_wording(msg: str) -> None:
+    """Pin the wording produced by ``token_rejected_message`` (#40, PR #58 review).
+
+    All three SECURITY.md-supported token shapes must be named so a user
+    with any one of them sees themselves in the advice; ``SECURITY.md``
+    must be referenced so a future permission change can update one place.
+    """
+    assert "Token rejected" in msg
+    assert "classic PAT" in msg
+    assert "fine-grained PAT" in msg
+    assert "GitHub App" in msg
+    assert "SECURITY.md" in msg
+
+
 def test_error_hierarchy() -> None:
     # All friendly errors are PlynthError; GraphQLError is also PlynthError now.
     for exc_cls in (AuthError, NotFoundError, NetworkError, GraphQLError):
@@ -36,8 +50,9 @@ def test_error_hierarchy() -> None:
 @responses.activate
 def test_graphql_401_raises_auth_error() -> None:
     responses.add(responses.POST, GRAPHQL_URL, status=401)
-    with pytest.raises(AuthError, match="Token rejected"):
+    with pytest.raises(AuthError) as excinfo:
         _gql().get_org_id("nope")
+    _assert_token_rejected_wording(str(excinfo.value))
 
 
 @responses.activate
@@ -132,8 +147,11 @@ def test_graphql_timeout_message_uses_configured_value() -> None:
 @responses.activate
 def test_rest_401_raises_auth_error() -> None:
     responses.add(responses.POST, MILESTONE_URL, status=401)
-    with pytest.raises(AuthError, match="Token rejected"):
+    with pytest.raises(AuthError) as excinfo:
         _rest().create_milestone(owner="example-org", repo="acme", title="T")
+    # REST and GraphQL share the same helper, so they MUST produce the
+    # same wording — pin both with the shared assertion.
+    _assert_token_rejected_wording(str(excinfo.value))
 
 
 @responses.activate

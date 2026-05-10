@@ -5,7 +5,7 @@ import logging
 import requests
 
 from plynth.engine.api_base import GitHubClient
-from plynth.errors import AuthError, NetworkError, NotFoundError
+from plynth.errors import AuthError, NetworkError, NotFoundError, token_rejected_message
 
 
 class RESTClient:
@@ -110,10 +110,7 @@ class RESTClient:
                 }
 
             if response.status_code == 401:
-                raise AuthError(
-                    f"Token rejected by {self.base.display_target}; verify PLYNTH_TOKEN "
-                    f"scopes include `repo` and `project`."
-                )
+                raise AuthError(token_rejected_message(self.base.display_target))
             if response.status_code == 404:
                 raise NotFoundError(
                     f"Repository {owner}/{repo} not found on {self.base.display_target}"

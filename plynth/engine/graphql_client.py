@@ -3,7 +3,13 @@ from __future__ import annotations
 import requests
 
 from plynth.engine.api_base import GitHubClient
-from plynth.errors import AuthError, NetworkError, NotFoundError, PlynthError
+from plynth.errors import (
+    AuthError,
+    NetworkError,
+    NotFoundError,
+    PlynthError,
+    token_rejected_message,
+)
 from plynth.queries import mutations, queries
 
 
@@ -67,10 +73,7 @@ class GraphQLClient:
                 return result["data"]
 
             if response.status_code == 401:
-                raise AuthError(
-                    f"Token rejected by {self.base.display_target}; verify PLYNTH_TOKEN "
-                    f"scopes include `repo` and `project`."
-                )
+                raise AuthError(token_rejected_message(self.base.display_target))
 
             if not self.base._handle_retry(response, attempt):
                 response.raise_for_status()
