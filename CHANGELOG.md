@@ -80,6 +80,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **schema_version cadence and load-path compat shims** (#45). The
+  template-level `schema_version` field now defaults to `"1.0"`, so
+  pre-M1 templates without the key keep parsing. M1 templates should
+  declare `schema_version: "1.1"` to flag use of `defaults:`, rich
+  `FieldOption`, and the `reconciliation:` stub; the engine accepts the
+  string verbatim. The version cadence (1.0 through 1.5, with M2-M5
+  planned) is documented in `docs/plynth-design-spec.md#schema-versioning`.
+  State-file shape migrations now live in
+  `StateFile._apply_compat_shims`, a single funnel for renames and
+  relocations; the pre-v0.3 `ghes_url` → `target` rename moves under
+  the new docstring. Pydantic defaults zero-fill genuinely additive
+  fields, so M1+ keys absent from a v0.3-era state file load cleanly.
+  Regression fixture: `tests/fixtures/v0_3-state.yaml` round-trips
+  through `model_validate` / `model_dump` under the current schema.
 - **401 error wording** (#40). Both the GraphQL and REST 401 handlers
   now point at SECURITY.md and name all three supported token shapes
   (classic PAT, fine-grained PAT, GitHub App). Pre-#40 they only

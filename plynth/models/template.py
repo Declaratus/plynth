@@ -185,7 +185,12 @@ class ReconciliationConfig(BaseModel):
 class TemplateDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: str
+    # See docs/plynth-design-spec.md#schema-versioning for the cadence.
+    # A template that omits `schema_version` is parsed as "1.0" (pre-M1).
+    # M1+ features (`defaults`, rich `FieldOption`, `reconciliation`) should
+    # declare `schema_version: "1.1"`; today the engine accepts them either
+    # way, but the table is the source of truth for what each version adds.
+    schema_version: str = "1.0"
     template: TemplateMetadata
     placeholders: dict[str, PlaceholderSpec] = {}
     status: list[FieldOption] = []

@@ -64,6 +64,25 @@ The tool reads a **template definition** (YAML) and an **instance config** (YAML
 
 ---
 
+## Schema versioning
+
+Templates and state files carry a `schema_version` string so older artifacts keep parsing across plynth releases. Templates that omit the key are parsed as `1.0` (pre-M1); state files default the same way.
+
+| version | adds |
+|---------|------|
+| `1.0` | base schema (pre-M1): placeholders, fields, milestones, issues, views, pruning, optional `status:` block |
+| `1.1` | M1: template-level `defaults:`, rich `FieldOption` (color/description/default/aliases/deprecated), `reconciliation:` stub |
+| `1.2` | M2: `labels:` catalogue, issue `labels` / `issue_type` (planned) |
+| `1.3` | M3: `label_rules:` (planned) |
+| `1.4` | M4: instance `label_overrides` / `issue_overrides` (planned) |
+| `1.5` | M5: verifier subcommand and `VerifyReport` (planned) |
+
+The engine accepts an M1 template either with or without `schema_version: "1.1"` today; the table is the contract for what each version adds, not a runtime gate. Templates that intend to use a future-version feature should declare the matching version so the contract is auditable in the file.
+
+State-file migrations live in `StateFile._apply_compat_shims` (`plynth/models/state.py`). It owns every dict-shape transformation needed to upgrade an older state file into the current in-memory shape (e.g. the pre-v0.3 `ghes_url` → `target` rename). Pydantic field defaults zero-fill missing keys, so genuinely additive M1+ fields need no shim, just a default on the model.
+
+---
+
 ## Template Definition Schema
 
 This is the machine-readable source of truth. One file per template, version-controlled in the repository.

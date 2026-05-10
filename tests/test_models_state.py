@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import yaml
+
 from plynth.models.state import (
     PHASE_1_PROJECT_AND_FIELDS,
     PHASE_3_ISSUES,
     StateFile,
 )
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_default_schema_version() -> None:
@@ -70,3 +76,34 @@ def test_legacy_ghes_url_does_not_override_target_if_both_present() -> None:
     }
     s = StateFile.model_validate(data)
     assert s.target == "https://new.example.com"
+
+
+# ── #45: schema_version cadence ────────────────────────────────────
+
+
+def test_v0_3_state_fixture_round_trips() -> None:
+    """A hand-written v0.3-era state file (pre-M1 shape) must load cleanly
+    under the current schema and survive a model_dump / model_validate cycle
+    without losing data. Regression guard for the compat-shim layer in
+    ``StateFile._apply_compat_shims``."""
+    raw = yaml.safe_load((FIXTURES / "v0_3-state.yaml").read_text(encoding="utf-8"))
+    loaded = StateFile.model_validate(raw)
+
+    assert loaded.schema_version == "1.0"
+    assert loaded.target == "https://ghes.example.com"
+    assert loaded.org == "example-org"
+    assert loaded.repo is not None and loaded.repo.name == "acme-service"
+    assert loaded.project is not None and loaded.project.number == 12
+    assert "workstream" in loaded.fields
+    assert loaded.fields["workstream"].options["Documentation"] == "opt_doc"
+    assert loaded.milestones["M1"].number == 3
+    assert loaded.issues["001"].number == 47
+    assert loaded.is_phase_complete(PHASE_1_PROJECT_AND_FIELDS)
+    assert not loaded.is_phase_complete(PHASE_3_ISSUES)
+    assert loaded.phases[PHASE_3_ISSUES].error == "Connection reset by peer"
+    # M1+ field absent from the v0.3 fixture must zero-fill cleanly.
+    assert loaded.status_field_id is None
+
+    # Dump and reload to confirm the result is itself a valid StateFile dict.
+    rebuilt = StateFile.model_validate(loaded.model_dump())
+    assert rebuilt.model_dump() == loaded.model_dump()

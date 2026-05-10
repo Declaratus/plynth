@@ -274,3 +274,29 @@ def test_reconciliation_invalid_mode_rejected() -> None:
     data["reconciliation"] = {"mode": "apply"}
     with pytest.raises(ValidationError):
         TemplateDefinition.model_validate(data)
+
+
+# ── #45: schema_version cadence ────────────────────────────────────
+
+
+def test_template_missing_schema_version_defaults_to_1_0() -> None:
+    """Pre-M1 templates omit `schema_version`. The default keeps them parsing."""
+    data = _base_template_dict()
+    data.pop("schema_version")
+    t = TemplateDefinition.model_validate(data)
+    assert t.schema_version == "1.0"
+
+
+def test_template_schema_version_1_1_loads() -> None:
+    """M1 templates declare `schema_version: '1.1'` to flag use of defaults,
+    rich FieldOption, and the reconciliation stub. The engine accepts the
+    string verbatim; the design-spec table is the contract for what each
+    version unlocks."""
+    data = _base_template_dict()
+    data["schema_version"] = "1.1"
+    data["defaults"] = {"fields": {"priority": "P1"}}
+    data["reconciliation"] = {"mode": "report_only"}
+    t = TemplateDefinition.model_validate(data)
+    assert t.schema_version == "1.1"
+    assert t.defaults.fields == {"priority": "P1"}
+    assert t.reconciliation.mode == "report_only"
