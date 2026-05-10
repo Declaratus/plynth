@@ -84,6 +84,53 @@ def test_graphql_403_permission_denied_raises_auth_error() -> None:
 
 
 @responses.activate
+def test_graphql_403_labels_query_vs_mutation_correctly() -> None:
+    """The 403 message names ``GraphQL query`` on read paths and
+    ``GraphQL mutation`` on write paths, so the operation tag in the error
+    matches the actual request type."""
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _gql().get_org_id("nope")  # query
+    assert "GraphQL query" in str(excinfo.value)
+    assert "GraphQL mutation" not in str(excinfo.value)
+
+    responses.reset()
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _gql().create_project(owner_id="O_1", title="T")  # mutation
+    assert "GraphQL mutation" in str(excinfo.value)
+
+
+@responses.activate
+def test_permission_denied_message_names_all_three_token_shapes() -> None:
+    """Parallel to the 401 token-rejected wording, the 403 advice names
+    fine-grained PAT, classic PAT, and GitHub App so a user with any shape
+    sees themselves in the advice."""
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _gql().get_org_id("nope")
+    msg = str(excinfo.value)
+    assert "fine-grained PAT" in msg
+    assert "classic PAT" in msg
+    assert "GitHub App" in msg
+
+
+@responses.activate
 def test_graphql_403_rate_limited_retries_then_succeeds() -> None:
     """A 403 with a rate-limit signal must retry and succeed on the next try."""
     responses.add(

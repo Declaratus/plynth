@@ -184,7 +184,8 @@ class RESTClient:
                     f"Permission denied by {self.base.display_target} creating repo "
                     f"'{org}/{name}': the token is authenticated but lacks the required "
                     f"permissions. Repo creation needs `repo` (classic) or organization "
-                    f"Administration: Read and write (fine-grained). See SECURITY.md."
+                    f"Administration: Read and write (fine-grained). See "
+                    f"SECURITY.md#token-handling."
                 )
 
             if not self.base._handle_retry(response, attempt):

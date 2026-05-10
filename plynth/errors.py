@@ -63,8 +63,9 @@ def permission_denied_message(display_target: str, operation: str) -> str:
         f"Permission denied by {display_target} on {operation}: the token is "
         f"authenticated but lacks the required permissions. plynth needs "
         f"repository Issues: Read and write plus organization Projects: Read "
-        f"and write (fine-grained PAT), or `repo` + `project` scopes (classic "
-        f"PAT). See SECURITY.md#token-handling."
+        f"and write (fine-grained PAT), `repo` + `project` scopes (classic "
+        f"PAT), or the equivalent installation permissions (GitHub App). See "
+        f"SECURITY.md#token-handling."
     )
 
 
