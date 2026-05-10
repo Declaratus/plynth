@@ -45,6 +45,10 @@ with `repo` + `project` scopes work end-to-end on either target. Full
 breakdown in [SECURITY.md](SECURITY.md#token-handling). `GHES_TOKEN` is
 accepted for one release with a deprecation warning.
 
+**Confirmed:** GHES 3.19 + FGPAT (2026-05). See
+[SECURITY.md](SECURITY.md#token-handling) for the permission set that
+worked.
+
 ## Technology stack
 
 - Python 3.9+ (must run on RHEL 8/9)
