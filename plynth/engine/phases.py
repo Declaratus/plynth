@@ -109,15 +109,12 @@ class PhaseOrchestrator:
     def phase_1_create_project_and_fields(self) -> None:
         """Create project, custom fields, and resolve field/option IDs."""
 
-        # 1a. Resolve org and repo IDs
-        org_id = self.gql.get_org_id(self.plan.instance_org)
-        repo_id = self._resolve_repo_id()
-        self.state.repo = RepoState(name=self.plan.instance_repo, node_id=repo_id)
-
         # If the template configures custom Status options, gate on the
-        # GraphQL surface being present *before* creating anything. A 3.18
-        # instance would otherwise leave an orphan project behind when the
-        # mutation 422s mid-phase.
+        # GraphQL surface being present *before any side effects*. The probe
+        # is pure schema introspection and runs ahead of org/repo resolution
+        # so that a 3.18 instance never reaches `_resolve_repo_id()` (which
+        # creates the repo when `repo.create: true`) — no orphan repos and no
+        # orphan projects.
         if self.plan.status_options and not self.gql.supports_status_overwrite():
             raise PlynthError(
                 f"Target {self.gql.base.display_target} does not expose "
@@ -125,6 +122,11 @@ class PhaseOrchestrator:
                 f"cannot be configured. GHES 3.19+ is required. Remove the "
                 f"template's `status:` block to fall back to GitHub's defaults."
             )
+
+        # 1a. Resolve org and repo IDs
+        org_id = self.gql.get_org_id(self.plan.instance_org)
+        repo_id = self._resolve_repo_id()
+        self.state.repo = RepoState(name=self.plan.instance_repo, node_id=repo_id)
 
         # 1b. Create the project
         project = self.gql.create_project(org_id, self.plan.project_name)
@@ -199,12 +201,15 @@ class PhaseOrchestrator:
 
             self.state.fields[field_def.id] = FieldState(node_id=raw["id"], options=options_map)
 
-    def _resolve_default_status_value(self) -> str | None:
+    def _resolve_default_status_value(self) -> str:
         """Pick the Status option to apply to new items.
 
         Precedence: explicit ``default: true`` in template.status, then the
         first option in display order, then the GitHub default ``Backlog``
-        when the template doesn't configure status at all.
+        when the template doesn't configure status at all. Always returns
+        a value — the option may not exist on the project (caller does the
+        ``options.get(...)`` lookup), but the desired value itself is
+        always known.
         """
         if not self.plan.status_options:
             return "Backlog"
@@ -301,8 +306,7 @@ class PhaseOrchestrator:
             # behavior).
             if "_status" in self.state.fields:
                 status_field = self.state.fields["_status"]
-                default_value = self._resolve_default_status_value()
-                option_id = status_field.options.get(default_value) if default_value else None
+                option_id = status_field.options.get(self._resolve_default_status_value())
                 if option_id:
                     self.gql.set_field_value(
                         project_id=self.state.project.node_id,

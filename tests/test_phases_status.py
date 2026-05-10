@@ -88,11 +88,12 @@ def _make_orchestrator(
     return orch, state
 
 
-def test_phase_1_aborts_before_creating_project_when_overwrite_unsupported(
+def test_phase_1_probe_runs_before_any_side_effects_when_unsupported(
     mocker: MockerFixture, tmp_path: Path
 ) -> None:
-    """A 3.18 instance must fail loud at the start of Phase 1 — no project
-    or fields should be created."""
+    """A 3.18 instance must fail before _resolve_repo_id() runs — otherwise
+    `repo.create: true` would create a repo we'd immediately abandon when
+    the probe failed (orphan-repo bug Copilot caught on PR #57)."""
     plan = _make_plan(
         status_options=[
             ResolvedFieldOption(value="Todo", color="GRAY", default=True),
@@ -106,6 +107,11 @@ def test_phase_1_aborts_before_creating_project_when_overwrite_unsupported(
     with pytest.raises(PlynthError, match="GHES 3.19"):
         orch.phase_1_create_project_and_fields()
 
+    # Probe gates on schema only; nothing touching the org/repo/project
+    # surface should have run.
+    orch.gql.get_org_id.assert_not_called()
+    orch.gql.get_repo_id.assert_not_called()
+    orch.rest.create_repo.assert_not_called()
     orch.gql.create_project.assert_not_called()
     orch.gql.create_field.assert_not_called()
     orch.gql.update_field_options.assert_not_called()
