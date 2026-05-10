@@ -36,8 +36,17 @@ def test_error_hierarchy() -> None:
 @responses.activate
 def test_graphql_401_raises_auth_error() -> None:
     responses.add(responses.POST, GRAPHQL_URL, status=401)
-    with pytest.raises(AuthError, match="Token rejected"):
+    with pytest.raises(AuthError) as excinfo:
         _gql().get_org_id("nope")
+    msg = str(excinfo.value)
+    # Both PAT shapes (#40): the message used to recommend only classic
+    # `repo` + `project`, which contradicted the FGPAT path documented in
+    # SECURITY.md. Now both shapes are named, with SECURITY.md as the
+    # canonical reference.
+    assert "Token rejected" in msg
+    assert "classic" in msg and "fine-grained" in msg
+    assert "Issues" in msg and "Projects" in msg
+    assert "SECURITY.md" in msg
 
 
 @responses.activate
@@ -132,8 +141,13 @@ def test_graphql_timeout_message_uses_configured_value() -> None:
 @responses.activate
 def test_rest_401_raises_auth_error() -> None:
     responses.add(responses.POST, MILESTONE_URL, status=401)
-    with pytest.raises(AuthError, match="Token rejected"):
+    with pytest.raises(AuthError) as excinfo:
         _rest().create_milestone(owner="example-org", repo="acme", title="T")
+    msg = str(excinfo.value)
+    # REST and GraphQL share the helper from #40; same wording assertions.
+    assert "Token rejected" in msg
+    assert "classic" in msg and "fine-grained" in msg
+    assert "SECURITY.md" in msg
 
 
 @responses.activate
