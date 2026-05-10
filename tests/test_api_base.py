@@ -249,13 +249,15 @@ def test_handle_retry_403_with_zero_rate_limit_remaining_retries() -> None:
     assert _do() is True
 
 
-@pytest.mark.parametrize(
-    "message",
-    [
-        "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.",
-        "You have triggered an abuse detection mechanism. Please wait a few minutes before you try again.",
-    ],
-)
+# Real GitHub phrasing trimmed to fit the line-length cap; the case-insensitive
+# substring match in is_rate_limited_403 keys on the canonical phrases here.
+_SECONDARY_RATE_LIMIT_BODIES = [
+    "You have exceeded a secondary rate limit.",
+    "You have triggered an abuse detection mechanism.",
+]
+
+
+@pytest.mark.parametrize("message", _SECONDARY_RATE_LIMIT_BODIES)
 def test_handle_retry_403_with_rate_limit_body_message_retries(message: str) -> None:
     client = GitHubClient("https://ghes.example.com", "tok", write_delay_ms=0)
 
