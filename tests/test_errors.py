@@ -24,6 +24,20 @@ def _rest() -> RESTClient:
     return RESTClient(GitHubClient(GHES_URL, "tok", write_delay_ms=0))
 
 
+def _assert_token_rejected_wording(msg: str) -> None:
+    """Pin the wording produced by ``token_rejected_message`` (#40, PR #58 review).
+
+    All three SECURITY.md-supported token shapes must be named so a user
+    with any one of them sees themselves in the advice; ``SECURITY.md``
+    must be referenced so a future permission change can update one place.
+    """
+    assert "Token rejected" in msg
+    assert "classic PAT" in msg
+    assert "fine-grained PAT" in msg
+    assert "GitHub App" in msg
+    assert "SECURITY.md" in msg
+
+
 def test_error_hierarchy() -> None:
     # All friendly errors are PlynthError; GraphQLError is also PlynthError now.
     for exc_cls in (AuthError, NotFoundError, NetworkError, GraphQLError):
@@ -38,15 +52,7 @@ def test_graphql_401_raises_auth_error() -> None:
     responses.add(responses.POST, GRAPHQL_URL, status=401)
     with pytest.raises(AuthError) as excinfo:
         _gql().get_org_id("nope")
-    msg = str(excinfo.value)
-    # Both PAT shapes (#40): the message used to recommend only classic
-    # `repo` + `project`, which contradicted the FGPAT path documented in
-    # SECURITY.md. Now both shapes are named, with SECURITY.md as the
-    # canonical reference.
-    assert "Token rejected" in msg
-    assert "classic" in msg and "fine-grained" in msg
-    assert "Issues" in msg and "Projects" in msg
-    assert "SECURITY.md" in msg
+    _assert_token_rejected_wording(str(excinfo.value))
 
 
 @responses.activate
@@ -143,11 +149,9 @@ def test_rest_401_raises_auth_error() -> None:
     responses.add(responses.POST, MILESTONE_URL, status=401)
     with pytest.raises(AuthError) as excinfo:
         _rest().create_milestone(owner="example-org", repo="acme", title="T")
-    msg = str(excinfo.value)
-    # REST and GraphQL share the helper from #40; same wording assertions.
-    assert "Token rejected" in msg
-    assert "classic" in msg and "fine-grained" in msg
-    assert "SECURITY.md" in msg
+    # REST and GraphQL share the same helper, so they MUST produce the
+    # same wording — pin both with the shared assertion.
+    _assert_token_rejected_wording(str(excinfo.value))
 
 
 @responses.activate

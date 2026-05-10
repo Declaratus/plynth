@@ -81,10 +81,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 
 - **401 error wording** (#40). Both the GraphQL and REST 401 handlers
-  now point at SECURITY.md and name both PAT shapes (classic `repo` +
-  `project`, or fine-grained Issues + Projects). Pre-#40 they only
-  mentioned the classic-PAT scopes, which contradicted the documented
-  fine-grained path. Wording centralized in
+  now point at SECURITY.md and name all three supported token shapes
+  (classic PAT, fine-grained PAT, GitHub App). Pre-#40 they only
+  mentioned classic-PAT scopes, which contradicted the documented
+  fine-grained and GitHub App paths. Wording centralized in
   `plynth.errors.token_rejected_message()` so the runtime can't drift
   away from SECURITY.md again. The repo-create 401 (only fires under
   `repo.create: true`) keeps its operation-specific Administration

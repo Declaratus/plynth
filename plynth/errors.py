@@ -33,14 +33,15 @@ def token_rejected_message(display_target: str) -> str:
     """Standard 401 advice for the GraphQL and REST clients.
 
     Single source of truth for the wording so the runtime message can't
-    drift away from SECURITY.md. The two PAT shapes named here mirror the
-    SECURITY.md "Token shapes" section verbatim — adjust both at once.
+    drift away from SECURITY.md. The three token shapes named here track
+    the subsections under SECURITY.md ``## Token handling`` (Fine-grained
+    PAT, Classic PAT, GitHub Apps) — keep this list in sync if a fourth
+    shape ever lands.
     """
     return (
-        f"Token rejected by {display_target}; verify PLYNTH_TOKEN has either "
-        f"classic `repo` + `project` scopes or a fine-grained PAT with "
-        f"repository Issues (Read and write) plus organization Projects "
-        f"(Read and write). See SECURITY.md for the full permission breakdown."
+        f"Token rejected by {display_target}; verify PLYNTH_TOKEN has scopes "
+        f"covering issue and project mutations. See SECURITY.md for supported "
+        f"token shapes (classic PAT, fine-grained PAT, GitHub App)."
     )
 
 
