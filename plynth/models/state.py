@@ -96,14 +96,34 @@ class StateFile(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _migrate_legacy_ghes_url(cls, data: Any) -> Any:
-        """v0.2.0 state files used `ghes_url`. Silently rename to `target` so
-        in-flight runs keep resuming after the v0.3.0 upgrade. State files are
-        machine-written; a hard rename would gratuitously break resume."""
-        if isinstance(data, dict) and "ghes_url" in data:
-            data = {**data}
+    def _apply_compat_shims(cls, data: Any) -> Any:
+        """Single funnel for state-file shape migrations across schema_version.
+
+        State files are machine-written, so a hard schema rename would break
+        in-flight resume across a plynth upgrade. This hook owns every dict
+        transformation needed to upgrade an older state file into the current
+        in-memory shape. Pydantic field defaults handle zero-filling missing
+        keys; this hook is for renames, relocations, and structural changes
+        that defaults can't express.
+
+        Shims, oldest first:
+
+        - pre-v0.3 (``ghes_url`` key): renamed to ``target`` in v0.3. The new
+          ``target`` key wins if both are somehow present.
+
+        See ``docs/plynth-design-spec.md#schema-versioning`` for the cadence
+        and which schema_version each shim corresponds to.
+        """
+        if not isinstance(data, dict):
+            return data
+        data = {**data}
+
+        # pre-v0.3 → v0.3+: ghes_url renamed to target. setdefault preserves
+        # any explicit target= that's already present.
+        if "ghes_url" in data:
             legacy = data.pop("ghes_url")
             data.setdefault("target", legacy)
+
         return data
 
     schema_version: str = "1.0"
