@@ -45,6 +45,30 @@ def token_rejected_message(display_target: str) -> str:
     )
 
 
+def permission_denied_message(display_target: str, operation: str) -> str:
+    """Standard 403 advice when the token is valid but lacks permissions.
+
+    GitHub returns 403 for two unrelated cases: rate-limit / abuse detection
+    (handled in ``api_base.is_rate_limited_403``) and permission denials.
+    When the response carries no rate-limit signal, the token is authenticated
+    but the permission set is wrong, which the retry loop can never fix.
+    Surface that as ``AuthError`` with a pointer at SECURITY.md so the user
+    isn't told "max retries exceeded" for a permanent condition.
+
+    ``operation`` describes the call that was denied (e.g. "creating
+    milestone", "GraphQL mutation") so the user can map the failure to the
+    permission row in SECURITY.md.
+    """
+    return (
+        f"Permission denied by {display_target} on {operation}: the token is "
+        f"authenticated but lacks the required permissions. plynth needs "
+        f"repository Issues: Read and write plus organization Projects: Read "
+        f"and write (fine-grained PAT), `repo` + `project` scopes (classic "
+        f"PAT), or the equivalent installation permissions (GitHub App). See "
+        f"SECURITY.md#token-handling."
+    )
+
+
 __all__ = [
     "PlynthError",
     "AuthError",
@@ -52,4 +76,5 @@ __all__ = [
     "NetworkError",
     "ConfigError",
     "token_rejected_message",
+    "permission_denied_message",
 ]

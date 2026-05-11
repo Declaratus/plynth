@@ -94,6 +94,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   fields, so M1+ keys absent from a v0.3-era state file load cleanly.
   Regression fixture: `tests/fixtures/v0_3-state.yaml` round-trips
   through `model_validate` / `model_dump` under the current schema.
+- **403 retry policy split** (#41). `_handle_retry` previously retried any
+  403 the same way it retried 429/502/503. GitHub uses 403 for two unrelated
+  cases: rate limits / abuse detection (retryable) and permission denials
+  (not). Plynth now only retries 403s that carry a positive rate-limit
+  signal: `Retry-After` header, `X-RateLimit-Remaining: 0`, or a
+  secondary-rate-limit phrase in the response body. Permission-denied 403s
+  raise `AuthError` immediately with a pointer at SECURITY.md, instead of
+  surfacing "Max retries exceeded" after spinning the loop. Repro that
+  motivated the fix: a fine-grained PAT without repository Issues access
+  used to fail Phase 2 milestone creation as a transient-looking timeout;
+  now it fails fast with permission advice.
 - **401 error wording** (#40). Both the GraphQL and REST 401 handlers
   now point at SECURITY.md and name all three supported token shapes
   (classic PAT, fine-grained PAT, GitHub App). Pre-#40 they only

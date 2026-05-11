@@ -51,13 +51,25 @@ fields:
 
 ## Best practices for option colors
 
-Pick colors per field as a categorical scale. Avoid two adjacent option values sharing a color, and reuse semantics across fields where possible:
+Pick colors per field using the palette as a categorical scale. Avoid two adjacent option values sharing a color. Reuse semantics across fields where possible: red = critical/blocked, gray = neutral/N/A, green = approved/done, yellow = in-progress/attention.
 
-- **red** — critical / blocked / regression
-- **yellow** — in progress / attention
-- **green** — approved / done
-- **gray** — neutral / N/A / not yet triaged
-- **blue / purple / orange / pink** — categorical distinctions where the semantics above don't apply
+The remaining colors (BLUE, PURPLE, ORANGE, PINK) carry no fixed meaning. Use them for categorical distinctions where the semantics above don't apply.
+
+### Worked example: Status
+
+The reference template's Status field (see `example-template.yaml`) walks the palette so adjacent steps never share a color and the semantic anchors land where you'd expect:
+
+```yaml
+status:
+  - { value: "Backlog",     color: GRAY,   default: true }  # not yet triaged
+  - { value: "Ready",       color: BLUE }                   # categorical
+  - { value: "In Progress", color: YELLOW }                 # attention
+  - { value: "Blocked",     color: RED }                    # blocked
+  - { value: "In Review",   color: PURPLE }                 # categorical
+  - { value: "Done",        color: GREEN }                  # done
+```
+
+The same mapping carries over to Priority in the reference template (`P1 -- Critical Path` lands on RED, `P2 -- Important` on YELLOW) and to any field with a critical/attention/done axis.
 
 ## Status field
 
