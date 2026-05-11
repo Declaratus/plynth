@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import requests
 
-from plynth.engine.api_base import GitHubClient
+from plynth.engine.api_base import GitHubClient, is_rate_limited_403
 from plynth.errors import (
     AuthError,
     NetworkError,
     NotFoundError,
     PlynthError,
+    permission_denied_message,
     token_rejected_message,
 )
 from plynth.queries import mutations, queries
@@ -74,6 +75,10 @@ class GraphQLClient:
 
             if response.status_code == 401:
                 raise AuthError(token_rejected_message(self.base.display_target))
+
+            if response.status_code == 403 and not is_rate_limited_403(response):
+                operation = "GraphQL mutation" if is_mutation else "GraphQL query"
+                raise AuthError(permission_denied_message(self.base.display_target, operation))
 
             if not self.base._handle_retry(response, attempt):
                 response.raise_for_status()

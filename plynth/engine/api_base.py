@@ -53,6 +53,32 @@ def derive_api_roots(target: str) -> tuple[str, str]:
     return (f"{stripped}/api/graphql", f"{stripped}/api/v3")
 
 
+# GitHub uses 403 for two unrelated cases: rate limit / abuse detection
+# (retryable) and permission denial (not retryable). The signals below are
+# the canonical rate-limit shapes from GitHub's REST docs; their absence
+# means a permission denial that the retry loop can't fix.
+_SECONDARY_RATE_LIMIT_PHRASES = ("secondary rate limit", "abuse detection")
+
+
+def is_rate_limited_403(response: requests.Response) -> bool:
+    """True iff a 403 response carries a positive rate-limit signal.
+
+    Checks three places, any one of which is enough: ``Retry-After`` header,
+    ``X-RateLimit-Remaining: 0`` (primary rate limit), or one of the
+    secondary-rate-limit phrases in the response body's ``message``.
+    """
+    if response.headers.get("Retry-After"):
+        return True
+    if response.headers.get("X-RateLimit-Remaining") == "0":
+        return True
+    try:
+        message = (response.json() or {}).get("message", "")
+    except ValueError:
+        message = ""
+    lower = message.lower() if isinstance(message, str) else ""
+    return any(phrase in lower for phrase in _SECONDARY_RATE_LIMIT_PHRASES)
+
+
 class GitHubClient:
     """Base HTTP client for GitHub.com or GHES with rate limiting and retry."""
 
@@ -138,8 +164,13 @@ class GitHubClient:
     def _handle_retry(self, response: requests.Response, attempt: int) -> bool:
         """Check if we should retry based on rate limit headers.
 
-        Returns True if the caller should retry the request.
+        Returns True if the caller should retry the request. A 403 only
+        counts as retryable when ``is_rate_limited_403`` confirms a rate
+        limit shape; permission-denied 403s fall through so the caller can
+        raise ``AuthError`` instead of spinning the retry loop.
         """
+        if response.status_code == 403 and not is_rate_limited_403(response):
+            return False
         if response.status_code in (429, 403, 502, 503):
             retry_after = response.headers.get("Retry-After")
             if retry_after:

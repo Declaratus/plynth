@@ -38,6 +38,18 @@ def _assert_token_rejected_wording(msg: str) -> None:
     assert "SECURITY.md" in msg
 
 
+def _assert_permission_denied_wording(msg: str) -> None:
+    """Pin the wording produced by ``permission_denied_message`` (#41).
+
+    Permission-denied 403s must read distinctly from 401 token-rejected — a
+    user staring at the message should be able to tell that the token is
+    valid but lacks permissions. SECURITY.md must be referenced.
+    """
+    assert "Permission denied" in msg
+    assert "lacks the required permissions" in msg
+    assert "SECURITY.md" in msg
+
+
 def test_error_hierarchy() -> None:
     # All friendly errors are PlynthError; GraphQLError is also PlynthError now.
     for exc_cls in (AuthError, NotFoundError, NetworkError, GraphQLError):
@@ -53,6 +65,89 @@ def test_graphql_401_raises_auth_error() -> None:
     with pytest.raises(AuthError) as excinfo:
         _gql().get_org_id("nope")
     _assert_token_rejected_wording(str(excinfo.value))
+
+
+@responses.activate
+def test_graphql_403_permission_denied_raises_auth_error() -> None:
+    """No rate-limit signals: surface AuthError immediately, don't burn retries."""
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _gql().get_org_id("nope")
+    _assert_permission_denied_wording(str(excinfo.value))
+    # Only one call — no retry loop on a permanent condition.
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_graphql_403_labels_query_vs_mutation_correctly() -> None:
+    """The 403 message names ``GraphQL query`` on read paths and
+    ``GraphQL mutation`` on write paths, so the operation tag in the error
+    matches the actual request type."""
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _gql().get_org_id("nope")  # query
+    assert "GraphQL query" in str(excinfo.value)
+    assert "GraphQL mutation" not in str(excinfo.value)
+
+    responses.reset()
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _gql().create_project(owner_id="O_1", title="T")  # mutation
+    assert "GraphQL mutation" in str(excinfo.value)
+
+
+@responses.activate
+def test_permission_denied_message_names_all_three_token_shapes() -> None:
+    """Parallel to the 401 token-rejected wording, the 403 advice names
+    fine-grained PAT, classic PAT, and GitHub App so a user with any shape
+    sees themselves in the advice."""
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _gql().get_org_id("nope")
+    msg = str(excinfo.value)
+    assert "fine-grained PAT" in msg
+    assert "classic PAT" in msg
+    assert "GitHub App" in msg
+
+
+@responses.activate
+def test_graphql_403_rate_limited_retries_then_succeeds() -> None:
+    """A 403 with a rate-limit signal must retry and succeed on the next try."""
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=403,
+        headers={"Retry-After": "0"},
+        json={"message": "secondary rate limit"},
+    )
+    responses.add(
+        responses.POST,
+        GRAPHQL_URL,
+        status=200,
+        json={"data": {"organization": {"id": "O_1"}}},
+    )
+    assert _gql().get_org_id("example-org") == "O_1"
+    assert len(responses.calls) == 2
 
 
 @responses.activate
@@ -152,6 +247,65 @@ def test_rest_401_raises_auth_error() -> None:
     # REST and GraphQL share the same helper, so they MUST produce the
     # same wording — pin both with the shared assertion.
     _assert_token_rejected_wording(str(excinfo.value))
+
+
+@responses.activate
+def test_rest_milestone_403_permission_denied_raises_auth_error() -> None:
+    """Repro of the bug in #41: a permission-denied 403 surfaces as AuthError
+    pointing at SECURITY.md, not as 'Max retries exceeded'."""
+    responses.add(
+        responses.POST,
+        MILESTONE_URL,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _rest().create_milestone(owner="example-org", repo="acme", title="Acme Foundation")
+    msg = str(excinfo.value)
+    _assert_permission_denied_wording(msg)
+    # The operation name is folded into the message so a user with multiple
+    # phases failing can map back to the call site.
+    assert "Acme Foundation" in msg
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_rest_milestone_403_rate_limited_retries_then_succeeds() -> None:
+    responses.add(
+        responses.POST,
+        MILESTONE_URL,
+        status=403,
+        headers={"Retry-After": "0"},
+        json={"message": "You have exceeded a secondary rate limit."},
+    )
+    responses.add(
+        responses.POST,
+        MILESTONE_URL,
+        status=201,
+        json={"number": 3, "node_id": "MI_1", "title": "T"},
+    )
+    result = _rest().create_milestone(owner="example-org", repo="acme", title="T")
+    assert result == {"number": 3, "node_id": "MI_1", "title": "T"}
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_rest_create_repo_403_permission_denied_raises_auth_error() -> None:
+    """create_repo keeps its operation-specific Administration wording."""
+    repo_url = f"{GHES_URL}/api/v3/orgs/example-org/repos"
+    responses.add(
+        responses.POST,
+        repo_url,
+        status=403,
+        json={"message": "Resource not accessible by integration"},
+    )
+    with pytest.raises(AuthError) as excinfo:
+        _rest().create_repo(org="example-org", name="acme")
+    msg = str(excinfo.value)
+    assert "Permission denied" in msg
+    assert "Administration: Read and write" in msg
+    assert "SECURITY.md" in msg
+    assert len(responses.calls) == 1
 
 
 @responses.activate

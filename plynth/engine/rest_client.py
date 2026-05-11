@@ -4,8 +4,14 @@ import logging
 
 import requests
 
-from plynth.engine.api_base import GitHubClient
-from plynth.errors import AuthError, NetworkError, NotFoundError, token_rejected_message
+from plynth.engine.api_base import GitHubClient, is_rate_limited_403
+from plynth.errors import (
+    AuthError,
+    NetworkError,
+    NotFoundError,
+    permission_denied_message,
+    token_rejected_message,
+)
 
 
 class RESTClient:
@@ -115,6 +121,12 @@ class RESTClient:
                 raise NotFoundError(
                     f"Repository {owner}/{repo} not found on {self.base.display_target}"
                 )
+            if response.status_code == 403 and not is_rate_limited_403(response):
+                raise AuthError(
+                    permission_denied_message(
+                        self.base.display_target, f"creating milestone '{title}'"
+                    )
+                )
 
             if not self.base._handle_retry(response, attempt):
                 response.raise_for_status()
@@ -167,6 +179,14 @@ class RESTClient:
                 )
             if response.status_code == 404:
                 raise NotFoundError(f"Organization {org} not found on {self.base.display_target}")
+            if response.status_code == 403 and not is_rate_limited_403(response):
+                raise AuthError(
+                    f"Permission denied by {self.base.display_target} creating repo "
+                    f"'{org}/{name}': the token is authenticated but lacks the required "
+                    f"permissions. Repo creation needs `repo` (classic) or organization "
+                    f"Administration: Read and write (fine-grained). See "
+                    f"SECURITY.md#token-handling."
+                )
 
             if not self.base._handle_retry(response, attempt):
                 response.raise_for_status()
