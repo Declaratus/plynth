@@ -8,6 +8,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] — 2026-05-10
+
+Closes the bootstrap loop: repo creation, GHES version probe, configurable
+Status field, JSON dry-run. Tightens 401 / 403 error wording around
+SECURITY.md and locks in the schema_version cadence for future M-series
+templates.
+
 ### Added
 
 - **JSON dry-run output** (#12). `plynth create --dry-run --format json`
