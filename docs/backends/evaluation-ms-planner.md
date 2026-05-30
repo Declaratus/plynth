@@ -119,7 +119,7 @@ Planner uses **aggressive optimistic concurrency**. From Microsoft's overview: *
 
 ## 5. Idempotence and reruns
 
-- **Template-node → backend-ID mapping is fully supported.** Plan, bucket, task, and details IDs are **durable, opaque, queryable** strings (28-char, case-sensitive) — exactly what `models/state.py` needs. plynth can store `{template_node: planner_id}` and re-fetch by ID on rerun.
+- **Template-node → backend-ID mapping is fully supported.** Plan, bucket, task, and details IDs are **durable, opaque, queryable** strings (28-char, case-sensitive) — exactly what `plynth/models/state.py` needs. plynth can store `{template_node: planner_id}` and re-fetch by ID on rerun.
 - **Non-idempotent operations needing defensive logic:**
   - **Task creation is not idempotent** — POSTing the same task twice creates **two tasks**. plynth must check its state file / query existing tasks before creating, keyed by stored ID (there is no client-supplied idempotency key).
   - **All updates need a current ETag** — a rerun must **re-GET** to refresh ETags before patching, or it will 409/412.
@@ -159,6 +159,8 @@ It is a **good fit for the "structured task board" subset** of plynth templates 
 
 ### Smallest plynth template that materializes cleanly against classic Planner
 
+> **Illustrative / proposed shape — does not parse against today's `plynth/models/template.py`.** This sketch shows a *future* template (with the proposed `backend_capabilities` block, buckets, and assignees) to convey the mapping; the current schema uses `template:` / `milestones:` / `issues:` with `template_id` / `milestone_id`. Treat as pseudocode.
+
 ```yaml
 # template.yaml — Planner-clean: tasks + buckets + label-as-single-select + due dates
 backend_capabilities:
@@ -195,7 +197,7 @@ issues:
     assignees: ["dev@contoso.com"]   # → resolved to Entra object ID (≤11/task)
 ```
 
-Materialization order (maps onto plynth's `phases.py`): validate/resolve → (ensure Group) → create plan → PATCH plan details (label names) → create buckets → create tasks → GET each task's details + PATCH description/labels (ETag) → set assignments. **No dependency phase.**
+Materialization order (maps onto plynth's `plynth/engine/phases.py`): validate/resolve → (ensure Group) → create plan → PATCH plan details (label names) → create buckets → create tasks → GET each task's details + PATCH description/labels (ETag) → set assignments. **No dependency phase.**
 
 ### If no — is Project for the web / Planner Premium the right target instead?
 **Not for v1.** P4W/Premium gives you the missing primitives (real milestones, typed custom fields, Finish-to-Start dependencies, Timeline), but the eval changes drastically and **worsens** on integration cost:
