@@ -121,3 +121,9 @@ Token-custody requirements are non-negotiable: vault storage, rotation, a break-
 - Custom-field and comment fidelity are environment-dependent; do not promise round-trip fidelity.
 - Identity mapping (GitHub↔Entra) is the silent project-killer; without SCIM/EMU it is a perpetual manual burden.
 - Secondary sources (community blogs by Pajunen, Kabir Barker; ITtrip) corroborate first-party docs on PSS mechanics but are not authoritative for licensing — the binding statements are the Microsoft Learn schedule-API and Graph Planner pages.
+
+## Related
+
+- [`evaluation-ms-planner.md`](evaluation-ms-planner.md) — classic Planner (Graph `/planner`) backend evaluation. Establishes that classic accepts app-only writes.
+- [`evaluation-ms-planner-premium.md`](evaluation-ms-planner-premium.md) — Planner & Project Plan 3 / P4W backend evaluation. Establishes the app-user write ban that drives this ADR's identity model.
+- Linear: initiative *Project Management as Code* → this ADR is tracked as DEC-111; the licensed-relay path is spiked in DEC-112.
