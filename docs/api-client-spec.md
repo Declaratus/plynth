@@ -1,5 +1,10 @@
 # API Client Implementation Spec
 
+> Baseline specification for GHES 3.19. The current implementation also has
+> repository creation/version detection and opt-in GHEC REST Project views.
+> See [the 2026-10-08 capability review](ghec-capabilities.md) for cloud
+> overrides to the historical REST/view constraints below.
+
 ## What to build
 
 Two API clients and a shared base, then update the phase constants to match the orchestration sequence.

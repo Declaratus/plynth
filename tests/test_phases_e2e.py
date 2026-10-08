@@ -26,10 +26,11 @@ from plynth.models.state import (
     PHASE_3_ISSUES,
     PHASE_4_PROJECT_ITEMS,
     PHASE_5_REFERENCES_AND_DEPS,
+    PHASE_6_VIEWS,
     PHASE_7_STATE_FILE,
     StateFile,
 )
-from plynth.models.template import TemplateDefinition
+from plynth.models.template import TemplateDefinition, ViewDefinition
 
 GHES_URL = "https://ghes.example.com"
 GRAPHQL_URL = f"{GHES_URL}/api/graphql"
@@ -512,3 +513,56 @@ def test_phases_e2e_against_github_com(
     urls_called = [call.request.url for call in responses.calls]
     assert any(url.startswith(GITHUB_GRAPHQL_URL) for url in urls_called)
     assert any(url.startswith(GITHUB_MILESTONE_URL) for url in urls_called)
+
+
+@responses.activate
+def test_ghec_pipeline_creates_views_and_resumes_without_writes(
+    minimal_template: TemplateDefinition,
+    minimal_instance: InstanceConfig,
+    tmp_path: Path,
+) -> None:
+    template = minimal_template.model_copy(
+        update={
+            "views": [
+                ViewDefinition(name="Intake", layout="table", create=True, filter_query="is:open"),
+                ViewDefinition(name="Manual", layout="board", group_by="Status"),
+            ]
+        }
+    )
+    instance = minimal_instance.model_copy(update={"target": "github.com"})
+    responses.add_callback(
+        responses.POST,
+        GITHUB_GRAPHQL_URL,
+        callback=_GraphQLDispatcher(),
+        content_type="application/json",
+    )
+    for i in range(1, 3):
+        responses.post(
+            GITHUB_MILESTONE_URL,
+            json={"number": i, "node_id": f"MI_{i}", "title": f"M{i}"},
+            status=201,
+        )
+    view_url = "https://api.github.com/orgs/example-org/projectsV2/7/views"
+    responses.post(
+        view_url,
+        json={
+            "value": {
+                "node_id": "PVTV_1",
+                "number": 1,
+                "html_url": "https://github.com/orgs/example-org/projects/7/views/1",
+            }
+        },
+        status=201,
+    )
+    state_path = tmp_path / "state.yaml"
+    orch, state = _build_orchestrator_with_target(template, instance, state_path, "github.com")
+    orch.execute()
+    assert state.is_phase_complete(PHASE_6_VIEWS)
+    assert state.is_phase_complete(PHASE_7_STATE_FILE)
+    assert set(state.views) == {"Intake"}
+    before = len(responses.calls)
+    loaded = StateFile.model_validate(yaml.safe_load(state_path.read_text()))
+    resumed, _ = _build_orchestrator_with_target(template, instance, state_path, "github.com")
+    resumed.state = loaded
+    resumed.execute()
+    assert len(responses.calls) == before

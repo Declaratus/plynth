@@ -56,11 +56,13 @@ removing one bumps `schema_version`.
   "field_values": 51,
   "body_updates": 17,
   "dependencies": 12,
+  "views_create": 0,
   "total": 119
 }
 ```
 
-`total` is the sum of the other six. The keys are pinned by a test
+`total` is the sum of the other seven. `views_create` counts opted-in
+GHEC views and is an additive schema-version-1 field. The keys are pinned by a test
 (`test_api_call_estimate_keys_and_total`) so accidental renames force
 a `schema_version` bump.
 

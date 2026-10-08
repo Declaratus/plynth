@@ -1,5 +1,10 @@
 # Phase Orchestrator Implementation Spec
 
+> Baseline specification for GHES 3.19. Phase 6 now creates opted-in basic
+> GHEC views through REST and checkpoints each confirmed view response.
+> See [the current capability review](ghec-capabilities.md); historical
+> view-skip pseudocode below still describes the GHES/manual path.
+
 ## What to build
 
 `plynth/engine/phases.py` — the core orchestration engine that takes an `ExecutionPlan` and drives it through Phases 1–7 using the API clients, checkpointing the `StateFile` after each phase.

@@ -42,6 +42,14 @@ class FieldState(BaseModel):
     options: dict[str, str] = {}
 
 
+class ViewState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    node_id: str
+    number: int
+    url: str
+
+
 class MilestoneState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -88,6 +96,7 @@ PHASE_2_MILESTONES = "phase_2_milestones"
 PHASE_3_ISSUES = "phase_3_issues"
 PHASE_4_PROJECT_ITEMS = "phase_4_project_items"
 PHASE_5_REFERENCES_AND_DEPS = "phase_5_references_and_deps"
+PHASE_6_VIEWS = "phase_6_views"
 PHASE_7_STATE_FILE = "phase_7_state_file"
 
 
@@ -138,6 +147,7 @@ class StateFile(BaseModel):
     repo: RepoState | None = None
     project: ProjectState | None = None
     fields: dict[str, FieldState] = {}
+    views: dict[str, ViewState] = {}
     status_field_id: str | None = None
     milestones: dict[str, MilestoneState] = {}
     issues: dict[str, IssueState] = {}

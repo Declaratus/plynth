@@ -85,17 +85,19 @@ pyproject.toml
 
 > Example templates, instance configs, and the full design spec are being prepared in a follow-up sanitization pass and are not yet included in the repository.
 
-## Locked constraints (confirmed against GHES 3.19 GraphQL docs; github.com behaves the same except where noted)
+## Backend constraints (GHES 3.19 baseline; GHEC exceptions noted)
 
-These are hard design decisions, not open questions. Do not revisit them.
+These constraints describe the implemented backend paths. GitHub.com/GHEC
+capabilities evolve independently from GHES releases; see the dated
+[capability review](docs/ghec-capabilities.md) before extending them.
 
-1. **GraphQL-first, REST for milestones only.** `createMilestone` is not in the GHES 3.19 GraphQL mutation reference. Everything else uses GraphQL. (github.com also requires REST for milestone creation today.)
+1. **GraphQL-first with specific REST operations.** Milestone creation, optional repository creation, GHES version detection, and opted-in GHEC Project view creation use REST. Project creation and issue/field operations retain their GraphQL paths.
 
 2. **Issue creation via GraphQL `createIssue`.** Supports `milestoneId` at creation time. Do NOT use `projectIds` on `CreateIssueInput` -- Project V2 requires `addProjectV2ItemById` then `updateProjectV2ItemFieldValue` as separate calls.
 
 3. **Dependencies via `addBlockedBy` / `removeBlockedBy`.** NOT `addIssueDependency` (doesn't exist). Normalization: `blocked_by: X` → `addBlockedBy(issueId=self, blockingIssueId=X)`. `blocks: Y` → `addBlockedBy(issueId=Y, blockingIssueId=self)`. Requires repository issues, not drafts.
 
-4. **Views are NOT automatable.** No `createProjectV2View` or `updateProjectV2View` mutations on GHES 3.19. Views section in template YAML is declarative documentation only.
+4. **Views depend on the target.** GHES 3.19 views remain declarative documentation. On GitHub.com/GHEC, set `create: true` on a view to create its name, layout and `filter_query` through the Projects REST API. Grouping, sorting, visible fields and Show hierarchy remain UI setup in this first implementation. Existing templates default to `create: false`. [Details and example](docs/ghec-capabilities.md#opt-in-project-views).
 
 5. **Bootstrap-only in v1.** No reconciliation, no destructive updates. Re-runs should be safe (idempotent where possible) but the tool does not diff desired vs actual state.
 
@@ -113,7 +115,7 @@ Phase 2: POST /repos/{owner}/{repo}/milestones (REST) → store number + node_id
 Phase 3: createIssue (GraphQL, with milestoneId) → capture issue number + node_id per template_id
 Phase 4: addProjectV2ItemById → updateProjectV2ItemFieldValue (per field per issue)
 Phase 5: Resolve {PREFIX}-### → #real_number in issue bodies via updateIssue → addBlockedBy per dependency edge
-Phase 6: Skip (views not automatable)
+Phase 6: Create opted-in GHEC views (REST); otherwise skip
 Phase 7: Write state file
 ```
 
@@ -250,7 +252,7 @@ Build in this order. Each step should be testable independently.
 
 ## What NOT to build in Phase B
 
-- View automation (not supported on GHES 3.19)
+- GHES 3.19 view automation; advanced GHEC view configuration
 - Drift detection / reconciliation (Phase E)
 - GitHub Action wrapper (Phase D)
 - Destructive operations (delete issues, remove fields)

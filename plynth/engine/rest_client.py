@@ -9,6 +9,7 @@ from plynth.errors import (
     AuthError,
     NetworkError,
     NotFoundError,
+    PlynthError,
     permission_denied_message,
     token_rejected_message,
 )
@@ -134,6 +135,60 @@ class RESTClient:
         raise NetworkError(
             f"Max retries ({self.base.max_retries}) exceeded creating milestone '{title}'"
         )
+
+    def create_project_view(
+        self, org: str, project_number: int, name: str, layout: str, filter_query: str = ""
+    ) -> dict:
+        """Create a basic organization Project view on github.com/GHEC.
+
+        This endpoint is independent of GraphQL view mutations and is not
+        assumed to exist on the supported GHES 3.19 baseline.
+        """
+        if self.base.is_ghes:
+            raise PlynthError("View creation requires github.com/GHEC")
+        self.base._wait_for_write_delay()
+        url = f"{self.base.rest_base}/orgs/{org}/projectsV2/{project_number}/views"
+        payload = {"name": name, "layout": layout, "filter": filter_query}
+        for attempt in range(self.base.max_retries):
+            try:
+                response = self.base.session.post(
+                    url,
+                    json=payload,
+                    headers={
+                        "Accept": "application/vnd.github+json",
+                        "X-GitHub-Api-Version": "2026-03-10",
+                    },
+                    timeout=self.base.request_timeout_s,
+                )
+            except requests.Timeout as e:
+                raise NetworkError(
+                    "View creation timed out; inspect the project before retrying"
+                ) from e
+            except requests.ConnectionError as e:
+                raise NetworkError(
+                    "View creation connection failed; inspect the project before retrying"
+                ) from e
+            if response.status_code == 201:
+                self.base._record_write()
+                return response.json()["value"]
+            if response.status_code in (401, 403) and not is_rate_limited_403(response):
+                raise AuthError(
+                    f"Creating view '{name}' requires organization Projects: Read and write "
+                    "(fine-grained PAT) or project scope (classic PAT)"
+                )
+            if response.status_code == 404:
+                raise NotFoundError(
+                    f"Project {org}/{project_number} is inaccessible or the view endpoint "
+                    "is unavailable; check project access and target capabilities"
+                )
+            # A server error may follow a committed POST. Do not replay it
+            # automatically: there is no idempotency key on this endpoint.
+            if response.status_code >= 500:
+                raise NetworkError("View creation failed; inspect the project before retrying")
+            if not self.base._handle_retry(response, attempt):
+                response.raise_for_status()
+                raise PlynthError(f"Unexpected view creation response: {response.status_code}")
+        raise NetworkError(f"Max retries exceeded creating view '{name}'")
 
     def create_repo(self, org: str, name: str) -> dict:
         """Create a private repository in `org`.

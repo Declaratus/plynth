@@ -18,6 +18,7 @@ from plynth.models.state import (
     PHASE_3_ISSUES,
     PHASE_4_PROJECT_ITEMS,
     PHASE_5_REFERENCES_AND_DEPS,
+    PHASE_6_VIEWS,
     PHASE_7_STATE_FILE,
     DependencyEdge,
     FieldState,
@@ -27,6 +28,7 @@ from plynth.models.state import (
     RepoState,
     SkippedItems,
     StateFile,
+    ViewState,
 )
 from plynth.utils.references import resolve_crossrefs
 
@@ -52,6 +54,8 @@ class PhaseOrchestrator:
 
     def execute(self) -> None:
         """Run all phases, skipping any already completed (resume support)."""
+        if any(view.create for view in self.plan.views) and self.gql.base.is_ghes:
+            raise PlynthError("View creation requires github.com/GHEC; use create: false on GHES")
         phases = [
             (PHASE_1_PROJECT_AND_FIELDS, self.phase_1_create_project_and_fields),
             (PHASE_2_MILESTONES, self.phase_2_create_milestones),
@@ -61,8 +65,10 @@ class PhaseOrchestrator:
                 PHASE_5_REFERENCES_AND_DEPS,
                 self.phase_5_resolve_references_and_dependencies,
             ),
-            (PHASE_7_STATE_FILE, self.phase_7_finalize),
         ]
+        if any(view.create for view in self.plan.views):
+            phases.append((PHASE_6_VIEWS, self.phase_6_create_views))
+        phases.append((PHASE_7_STATE_FILE, self.phase_7_finalize))
 
         for phase_key, phase_fn in phases:
             if self.state.is_phase_complete(phase_key):
@@ -418,6 +424,28 @@ class PhaseOrchestrator:
         for tid in issue.skipped_blocked_by + issue.skipped_blocks:
             skipped.add(f"{{PREFIX}}-{tid}")
         return skipped
+
+    # ── Phase 6: Optional GHEC views ───────────────────────
+
+    def phase_6_create_views(self) -> None:
+        """Create opted-in views, checkpointing each confirmed response."""
+        if self.state.project is None:
+            raise PlynthError("Cannot create views before the project exists")
+        for view in self.plan.views:
+            if not view.create or view.name in self.state.views:
+                continue
+            created = self.rest.create_project_view(
+                org=self.plan.instance_org,
+                project_number=self.state.project.number,
+                name=view.name,
+                layout=view.layout,
+                filter_query=view.filter_query,
+            )
+            self.state.views[view.name] = ViewState(
+                node_id=created["node_id"], number=created["number"], url=created["html_url"]
+            )
+            self._save_state()
+            self.log.info(f"Created view: {view.name} ({created['html_url']})")
 
     # ── Phase 7: Finalize ──────────────────────────────────
 

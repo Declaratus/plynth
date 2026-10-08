@@ -11,6 +11,7 @@ once the core implementation is stable.
 
 | File | Purpose | Use when |
 |------|---------|----------|
+| [ghec-capabilities.md](ghec-capabilities.md) | Dated cloud capability review, implemented view path and remaining gaps | Planning GHEC adoption independently of GHES 3.19 |
 | [plynth-design-spec.md](plynth-design-spec.md) | Master architecture spec: template schema, instance config schema, 7-phase execution algorithm, API surface, locked constraints | Understanding the full system design before implementing any component |
 | [orchestrator-spec.md](orchestrator-spec.md) | Implementation spec for `plynth/engine/phases.py` and `plynth/cli.py`: exact Python class/method signatures, per-phase pseudocode, state checkpointing, resume logic | Implementing, extending, or debugging the phase orchestrator |
 | [planner-spec.md](planner-spec.md) | Implementation spec for `plynth/engine/planner.py`: placeholder resolution algorithm, pruning logic, dependency graph trimming, `ExecutionPlan` model | Implementing or debugging the planner (pure computation, no API calls) |
@@ -31,7 +32,7 @@ Phase 2  Create repository milestones (REST -- createMilestone not in GraphQL)
 Phase 3  Create issues with milestone assignments (GraphQL)
 Phase 4  Add issues to project + set custom field values (GraphQL)
 Phase 5  Resolve {PREFIX}-### cross-references in bodies + wire addBlockedBy (GraphQL)
-Phase 6  Views -- not automated (no createProjectV2View mutation on GHES 3.19)
+Phase 6  Opted-in GHEC views (REST); GHES 3.19 views remain manual
 Phase 7  Finalize state file
 ```
 

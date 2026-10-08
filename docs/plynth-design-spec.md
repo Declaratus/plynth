@@ -1,5 +1,10 @@
 # GitHub Projects as Code (plynth) -- Design Specification
 
+> The API constraints in this design are the GHES 3.19 baseline. For the
+> implemented opt-in GHEC REST view path and newer cloud capabilities, use
+> [the 2026-10-08 capability review](ghec-capabilities.md). Historical
+> GraphQL-only view limitations below do not apply universally to GHEC.
+
 ## Purpose
 
 Automate the full lifecycle of GitHub Project instantiation from declarative YAML templates. Eliminate the manual 30-60 minute Phase 2 process (copy template, convert drafts, assign milestones, replace placeholders, wire dependencies) and remove the assumption that target repositories have sequential issue numbers.
@@ -78,6 +83,11 @@ Templates and state files carry a `schema_version` string so older artifacts kee
 | `1.5` | M5: verifier subcommand and `VerifyReport` (planned) |
 
 The engine accepts an M1 template either with or without `schema_version: "1.1"` today; the table is the contract for what each version adds, not a runtime gate. Templates that intend to use a future-version feature should declare the matching version so the contract is auditable in the file.
+
+The optional `views[].create` and `filter_query` cloud extension is additive
+to the `1.1` template line; existing views default to documentation-only.
+It does not consume the planned `1.2` labels version. State files gain an
+optional `views` mapping with an empty default, so older state remains readable.
 
 State-file migrations live in `StateFile._apply_compat_shims` (`plynth/models/state.py`). It owns every dict-shape transformation needed to upgrade an older state file into the current in-memory shape (e.g. the pre-v0.3 `ghes_url` → `target` rename). Pydantic field defaults zero-fill missing keys, so genuinely additive M1+ fields need no shim, just a default on the model.
 
