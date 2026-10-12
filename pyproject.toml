@@ -52,6 +52,7 @@ plynth = "plynth.cli:main"
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
