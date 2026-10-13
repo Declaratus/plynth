@@ -3,7 +3,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 
 class TemplateRef(BaseModel):
@@ -148,12 +155,24 @@ class StateFile(BaseModel):
     project: ProjectState | None = None
     fields: dict[str, FieldState] = {}
     views: dict[str, ViewState] = {}
+    pending_views: list[str] = Field(default_factory=list)
     status_field_id: str | None = None
     milestones: dict[str, MilestoneState] = {}
     issues: dict[str, IssueState] = {}
     dependencies_created: list[DependencyEdge] = []
     skipped: SkippedItems = Field(default_factory=SkippedItems)
     phases: dict[str, PhaseStatus] = {}
+
+    @model_serializer(mode="wrap")
+    def _serialize_view_extension(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if self.views or self.pending_views:
+            data["schema_version"] = "1.1"
+        if not self.views:
+            data.pop("views", None)
+        if not self.pending_views:
+            data.pop("pending_views", None)
+        return data
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()

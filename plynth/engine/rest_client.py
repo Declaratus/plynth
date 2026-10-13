@@ -4,12 +4,12 @@ import logging
 
 import requests
 
-from plynth.engine.api_base import GitHubClient, is_rate_limited_403
+from plynth.engine.api_base import GitHubClient, is_rate_limited_403, require_cloud_views
 from plynth.errors import (
     AuthError,
+    ConfigError,
     NetworkError,
     NotFoundError,
-    PlynthError,
     permission_denied_message,
     token_rejected_message,
 )
@@ -144,8 +144,7 @@ class RESTClient:
         This endpoint is independent of GraphQL view mutations and is not
         assumed to exist on the supported GHES 3.19 baseline.
         """
-        if self.base.is_ghes:
-            raise PlynthError("View creation requires github.com/GHEC")
+        require_cloud_views(self.base.target)
         self.base._wait_for_write_delay()
         url = f"{self.base.rest_base}/orgs/{org}/projectsV2/{project_number}/views"
         payload = {"name": name, "layout": layout, "filter": filter_query}
@@ -160,21 +159,36 @@ class RESTClient:
                     },
                     timeout=self.base.request_timeout_s,
                 )
-            except requests.Timeout as e:
+            except requests.RequestException as e:
                 raise NetworkError(
-                    "View creation timed out; inspect the project before retrying"
+                    "View creation response is uncertain; inspect the project before retrying"
                 ) from e
-            except requests.ConnectionError as e:
-                raise NetworkError(
-                    "View creation connection failed; inspect the project before retrying"
-                ) from e
-            if response.status_code == 201:
+            if 200 <= response.status_code < 300:
                 self.base._record_write()
-                return response.json()["value"]
-            if response.status_code in (401, 403) and not is_rate_limited_403(response):
+                try:
+                    data = response.json()
+                    data = data.get("value", data) if isinstance(data, dict) else None
+                    if (
+                        not isinstance(data, dict)
+                        or not isinstance(data.get("node_id"), str)
+                        or not data["node_id"]
+                        or type(data.get("number")) is not int
+                        or data["number"] < 1
+                        or not isinstance(data.get("html_url"), str)
+                        or not data["html_url"].startswith("https://")
+                    ):
+                        raise ValueError("Missing or invalid view identity")
+                    return data
+                except ValueError as e:
+                    raise NetworkError(
+                        "View creation returned an unconfirmed response; "
+                        "inspect the project before retrying"
+                    ) from e
+            if response.status_code == 401:
+                raise AuthError(token_rejected_message(self.base.display_target))
+            if response.status_code == 403 and not is_rate_limited_403(response):
                 raise AuthError(
-                    f"Creating view '{name}' requires organization Projects: Read and write "
-                    "(fine-grained PAT) or project scope (classic PAT)"
+                    permission_denied_message(self.base.display_target, f"creating view '{name}'")
                 )
             if response.status_code == 404:
                 raise NotFoundError(
@@ -186,8 +200,10 @@ class RESTClient:
             if response.status_code >= 500:
                 raise NetworkError("View creation failed; inspect the project before retrying")
             if not self.base._handle_retry(response, attempt):
-                response.raise_for_status()
-                raise PlynthError(f"Unexpected view creation response: {response.status_code}")
+                raise ConfigError(
+                    f"Creating view '{name}' was rejected (HTTP {response.status_code}); "
+                    "check the name, layout and filter_query"
+                )
         raise NetworkError(f"Max retries exceeded creating view '{name}'")
 
     def create_repo(self, org: str, name: str) -> dict:

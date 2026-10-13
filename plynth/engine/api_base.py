@@ -7,6 +7,8 @@ from importlib import metadata
 
 import requests
 
+from plynth.errors import ConfigError
+
 
 def derive_api_roots(target: str) -> tuple[str, str]:
     """Return (graphql_endpoint, rest_base) for a target.
@@ -51,6 +53,16 @@ def derive_api_roots(target: str) -> tuple[str, str]:
         )
 
     return (f"{stripped}/api/graphql", f"{stripped}/api/v3")
+
+
+def is_ghes_target(target: str) -> bool:
+    """Use the routing definition for cloud/enterprise target classification."""
+    return derive_api_roots(target)[1] != "https://api.github.com"
+
+
+def require_cloud_views(target: str) -> None:
+    if is_ghes_target(target):
+        raise ConfigError("View creation requires github.com/GHEC; set create: false on GHES views")
 
 
 # GitHub uses 403 for two unrelated cases: rate limit / abuse detection
@@ -126,7 +138,7 @@ class GitHubClient:
         tolerates `github.com/` and `https://api.github.com/`. Without this,
         the trailing-slash variants would route to `/meta` probing.
         """
-        return self.target.rstrip("/") not in ("", "github.com", "https://api.github.com")
+        return is_ghes_target(self.target)
 
     def warn_if_below(
         self,

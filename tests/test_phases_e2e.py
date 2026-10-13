@@ -66,6 +66,24 @@ class _GraphQLDispatcher:
         query = payload["query"]
         variables = payload.get("variables", {})
 
+        if "GetProjectViews" in query:
+            return (
+                200,
+                {},
+                json.dumps(
+                    {
+                        "data": {
+                            "node": {
+                                "views": {
+                                    "nodes": [],
+                                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                }
+                            }
+                        }
+                    }
+                ),
+            )
+
         if "__type(name:" in query and "UpdateProjectV2FieldInput" in query:
             # GHES 3.19+ exposes singleSelectOptions on UpdateProjectV2FieldInput.
             return (

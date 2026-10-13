@@ -6,7 +6,10 @@ from datetime import date, timedelta
 from importlib import metadata
 from typing import Any
 
-from plynth.engine.api_base import derive_api_roots
+from pydantic import ValidationError
+
+from plynth.engine.api_base import require_cloud_views
+from plynth.errors import ConfigError
 from plynth.models.instance import InstanceConfig
 from plynth.models.plan import (
     ExecutionPlan,
@@ -220,25 +223,32 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
     # ── Step 8: Resolve project description ({DATE}) ──────────────
     project_desc = instance.project.description.replace("{DATE}", date.today().isoformat())
 
-    resolved_views = [
-        ViewDefinition.model_validate(
-            {
-                **view.model_dump(),
-                "name": resolve_placeholders(view.name, values),
-                "filter_query": resolve_placeholders(view.filter_query, values),
-            }
-        )
-        for view in template.views
-    ]
+    resolved_views = []
+    for view in template.views:
+        if not view.create:
+            resolved_views.append(view)
+            if view.filter_query:
+                warnings.append(
+                    f"View '{view.name}' is documentation only; its filter_query is not applied"
+                )
+            continue
+        try:
+            resolved_views.append(
+                ViewDefinition.model_validate(
+                    {
+                        **view.model_dump(),
+                        "name": resolve_placeholders(view.name, values),
+                        "filter_query": resolve_placeholders(view.filter_query, values),
+                    }
+                )
+            )
+        except ValidationError as error:
+            raise ConfigError(f"Invalid resolved view '{view.name}': {error}") from error
     created_names = [view.name for view in resolved_views if view.create]
     if created_names:
-        if derive_api_roots(instance.target)[1] != "https://api.github.com":
-            raise ValueError(
-                "View creation is supported only on github.com/GHEC; "
-                "set create: false on GHES views"
-            )
+        require_cloud_views(instance.target)
         if len(created_names) != len(set(created_names)):
-            raise ValueError("Views with create: true must have unique resolved names")
+            raise ConfigError("Views with create: true must have unique resolved names")
 
     # ── Step 9: Assemble ───────────────────────────────────────────
     return ExecutionPlan(
@@ -344,7 +354,8 @@ def format_dry_run(ep: ExecutionPlan) -> str:
             action = "create via REST" if view.create else "documentation only"
             w(f"  {view.name} [{view.layout}]: {action}")
             if view.filter_query:
-                w(f"       filter: {view.filter_query}")
+                label = "filter" if view.create else "filter (documentation; not applied)"
+                w(f"       {label}: {view.filter_query}")
         w("")
 
     # Warnings

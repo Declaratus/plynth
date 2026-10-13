@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import tempfile
+import time
 from pathlib import Path
 
 import yaml
 
+from plynth.engine.api_base import require_cloud_views
 from plynth.engine.graphql_client import GraphQLClient
 from plynth.engine.rest_client import RESTClient
-from plynth.errors import NotFoundError, PlynthError
+from plynth.errors import AuthError, ConfigError, NotFoundError, PlynthError
 from plynth.models.plan import ExecutionPlan, ResolvedIssue
 from plynth.models.state import (
     PHASE_1_PROJECT_AND_FIELDS,
@@ -54,8 +58,11 @@ class PhaseOrchestrator:
 
     def execute(self) -> None:
         """Run all phases, skipping any already completed (resume support)."""
-        if any(view.create for view in self.plan.views) and self.gql.base.is_ghes:
-            raise PlynthError("View creation requires github.com/GHEC; use create: false on GHES")
+        creates_views = any(view.create for view in self.plan.views)
+        if creates_views:
+            # Direct callers can supply a plan and independently configured clients.
+            for target in {self.plan.target, self.gql.base.target, self.rest.base.target}:
+                require_cloud_views(target)
         phases = [
             (PHASE_1_PROJECT_AND_FIELDS, self.phase_1_create_project_and_fields),
             (PHASE_2_MILESTONES, self.phase_2_create_milestones),
@@ -66,7 +73,7 @@ class PhaseOrchestrator:
                 self.phase_5_resolve_references_and_dependencies,
             ),
         ]
-        if any(view.create for view in self.plan.views):
+        if creates_views:
             phases.append((PHASE_6_VIEWS, self.phase_6_create_views))
         phases.append((PHASE_7_STATE_FILE, self.phase_7_finalize))
 
@@ -100,15 +107,23 @@ class PhaseOrchestrator:
                 raise
 
     def _save_state(self) -> None:
-        """Write state file to disk."""
+        """Replace state atomically so a failed checkpoint preserves the previous file."""
         self.state.touch()
-        with open(self.state_path, "w", encoding="utf-8") as f:
-            yaml.dump(
-                self.state.model_dump(mode="json"),
-                f,
-                default_flow_style=False,
-                sort_keys=False,
-            )
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self.state_path.parent, delete=False
+            ) as f:
+                temporary = Path(f.name)
+                yaml.dump(
+                    self.state.model_dump(mode="json"), f, default_flow_style=False, sort_keys=False
+                )
+                f.flush()
+                os.fsync(f.fileno())
+            temporary.replace(self.state_path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     # ── Phase 1: Create Project and Fields ─────────────────
 
@@ -428,22 +443,70 @@ class PhaseOrchestrator:
     # ── Phase 6: Optional GHEC views ───────────────────────
 
     def phase_6_create_views(self) -> None:
-        """Create opted-in views, checkpointing each confirmed response."""
+        """Recover matching remote views and persist intent before each POST."""
         if self.state.project is None:
             raise PlynthError("Cannot create views before the project exists")
-        for view in self.plan.views:
-            if not view.create or view.name in self.state.views:
+        wanted = [v for v in self.plan.views if v.create and v.name not in self.state.views]
+        if not wanted:
+            return
+        remote = self.gql.get_project_views(self.state.project.node_id)
+        for view in wanted:
+            matches = [item for item in remote if item["name"] == view.name]
+            if not matches and view.name in self.state.pending_views:
+                # Read retries only: an uncertain POST must never be blindly replayed.
+                for delay in (1, 2):
+                    time.sleep(delay)
+                    remote = self.gql.get_project_views(self.state.project.node_id)
+                    matches = [item for item in remote if item["name"] == view.name]
+                    if matches:
+                        break
+                if not matches:
+                    raise PlynthError(
+                        f"View '{view.name}' has an unconfirmed creation attempt. "
+                        "Inspect the Project; only remove its pending_views entry after "
+                        "confirming no creation is still in flight. No POST was replayed."
+                    )
+            if matches:
+                if (
+                    len(matches) != 1
+                    or matches[0]["layout"] != f"{view.layout.upper()}_LAYOUT"
+                    or (matches[0]["filter"] or "") != view.filter_query
+                ):
+                    raise ConfigError(
+                        f"Existing view '{view.name}' is ambiguous or differs from plan"
+                    )
+                item = matches[0]
+                self.state.views[view.name] = ViewState(
+                    node_id=item["id"],
+                    number=item["number"],
+                    url=(
+                        f"https://github.com/orgs/{self.plan.instance_org}/projects/"
+                        f"{self.state.project.number}/views/{item['number']}"
+                    ),
+                )
+                if view.name in self.state.pending_views:
+                    self.state.pending_views.remove(view.name)
+                self._save_state()
+                self.log.info(f"Recovered existing view: {view.name}")
                 continue
-            created = self.rest.create_project_view(
-                org=self.plan.instance_org,
-                project_number=self.state.project.number,
-                name=view.name,
-                layout=view.layout,
-                filter_query=view.filter_query,
-            )
+            self.state.pending_views.append(view.name)
+            self._save_state()
+            try:
+                created = self.rest.create_project_view(
+                    org=self.plan.instance_org,
+                    project_number=self.state.project.number,
+                    name=view.name,
+                    layout=view.layout,
+                    filter_query=view.filter_query,
+                )
+            except (AuthError, ConfigError, NotFoundError):
+                self.state.pending_views.remove(view.name)
+                self._save_state()
+                raise
             self.state.views[view.name] = ViewState(
                 node_id=created["node_id"], number=created["number"], url=created["html_url"]
             )
+            self.state.pending_views.remove(view.name)
             self._save_state()
             self.log.info(f"Created view: {view.name} ({created['html_url']})")
 

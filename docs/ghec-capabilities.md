@@ -1,6 +1,6 @@
 # GitHub.com/GHEC capability review
 
-Reviewed 2026-10-08. This is a current adoption reference. Older design and
+Reviewed 2026-10-08; API/recovery guidance rechecked 2026-10-12. Older design and
 orchestrator specifications describe the GHES 3.19 implementation baseline;
 they are not a claim that cloud capabilities remain frozen at that release.
 
@@ -8,6 +8,7 @@ they are not a claim that cloud capabilities remain frozen at that release.
 |---|---|---|
 | Projects REST API | [September 2025 release](https://github.blog/changelog/2025-09-11-a-rest-api-for-github-projects-sub-issues-improvements-and-more/) | Keep working GraphQL paths; adopt REST where it adds an implemented capability. |
 | Project view creation | [Current REST view API](https://docs.github.com/en/rest/projects/views) | Opt-in basic organization views implemented below; no assumption of GHES support. |
+| GraphQL view API | [July 2026 schema additions](https://docs.github.com/en/graphql/overview/changelog/2026#schema-changes-for-2026-07-28) | Cloud also supports view mutations; this implementation uses REST creation and GraphQL reads for recovery. |
 | Cross-organization sub-issues | [September 2025 release](https://github.blog/changelog/2025-09-11-a-rest-api-for-github-projects-sub-issues-improvements-and-more/) | Not implemented by plynth; [qualified identity / hierarchy work](https://github.com/Declaratus/plynth/issues/71). |
 | Hierarchy in table views | [January 2026 preview](https://github.blog/changelog/2026-01-15-hierarchy-view-now-available-in-github-projects/) | Enable Show hierarchy in the UI; a dependency edge does not create a sub-issue. |
 | Query-based import and reparenting | [February 2026 update](https://github.blog/changelog/2026-02-19-github-projects-import-items-based-on-a-query-and-hierarchy-view-improvements/) | Useful for adding existing work to a portfolio. Query import is a starting population, not a continuous synchronization contract. |
@@ -33,7 +34,7 @@ views:
 Supported targets are `github.com` and `https://api.github.com`.
 GHEC data-residency hosts (`*.ghe.com`) are not routed by this implementation.
 `create` defaults to false, including in existing templates. View names
-and filter queries resolve instance placeholders; opted-in names must be
+and filter queries resolve instance placeholders only for opted-in views; names must be
 unique after resolution. Dry-run shows every view's action and counts
 creation calls. `description` is documentation and is not sent to the API.
 
@@ -49,11 +50,27 @@ Phase 6 calls `POST /orgs/{org}/projectsV2/{project_number}/views` with
 API version `2026-03-10`. Other REST operations retain their existing
 version. The token needs organization Projects write permission. Each
 confirmed view response is checkpointed by resolved name with node ID,
-number and URL; a partial resume skips those views. This is bootstrap,
-not view reconciliation. HTTP 5xx, timeout or connection failures are not
-automatically replayed: inspect the remote Project before resuming because
-an unconfirmed POST may have succeeded. A changed name creates a new view;
+number and URL; a partial resume skips those views. Before each POST, an
+atomic checkpoint records its name in `pending_views`. The phase reads every
+page of [Project views](https://docs.github.com/en/graphql/reference/projects#projectv2view)
+and adopts a uniquely matching name/layout/filter instead of creating a copy.
+Duplicate names or mismatched configurations stop the run without modifying
+those views. HTTP 5xx, timeout, malformed success or connection failures are
+not automatically replayed. Resume retries reads for a pending view; if none
+appears, it stops for inspection. Only remove the `pending_views` entry after
+confirming that no creation is still in flight. This also recovers a successful
+POST followed by a crash or failed local checkpoint. Concurrent independent
+writers can still race; do not bootstrap the same Project in parallel.
+A changed name creates a new view;
 it does not rename one. Keep the state file and normal hash guards.
+
+The REST docs' example wraps the view in `value`; its schema describes the
+object directly. Both shapes are accepted, and required identity fields are
+validated before recording success. An unexpected 2xx without a complete
+view object remains uncertain rather than becoming a confirmed checkpoint.
+State with views or pending creation uses schema `1.1` and requires this
+version of plynth. Runs without views omit the new empty keys and retain the
+legacy `1.0` shape for rollback compatibility.
 
 ## Portfolio/intake bootstrap
 
