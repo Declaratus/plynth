@@ -8,6 +8,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in organization Project view creation on GitHub.com/GHEC through the
+  REST API. `views[].create: true` creates name, layout and `filter_query`
+  in Phase 6; confirmed view IDs/URLs are checkpointed for resume.
+  Existing templates remain documentation-only, and GHES requests are
+  rejected before side effects. Advanced view settings remain manual.
+- Dated GHEC capability review and a Declaratus portfolio/intake bootstrap
+  template that creates fields and views without creating duplicate issues.
+- Additive `api_call_estimate.views_create` and text dry-run view actions.
+- Remote view recovery by name/layout/filter, paginated view reads and
+  durable pending-creation checkpoints. Uncertain writes are never blindly
+  replayed; checkpoints are replaced atomically.
+
+### Changed
+
+- Scope README API constraints to the GHES baseline and implemented paths,
+  rather than assuming cloud Projects capabilities match GHES 3.19.
+- States that use views declare schema `1.1`; runs without views preserve
+  the legacy `1.0` shape. View preflight and HTTP failures use user-facing
+  errors, and successful REST bodies accept wrapped or direct view objects.
+
 ---
 
 ## [0.4.0] — 2026-05-10

@@ -6,6 +6,10 @@ from datetime import date, timedelta
 from importlib import metadata
 from typing import Any
 
+from pydantic import ValidationError
+
+from plynth.engine.api_base import require_cloud_views
+from plynth.errors import ConfigError
 from plynth.models.instance import InstanceConfig
 from plynth.models.plan import (
     ExecutionPlan,
@@ -14,7 +18,7 @@ from plynth.models.plan import (
     ResolvedIssue,
     ResolvedMilestone,
 )
-from plynth.models.template import FieldOption, TemplateDefinition
+from plynth.models.template import FieldOption, TemplateDefinition, ViewDefinition
 
 # Stable schema version for the JSON dry-run payload. Bump on
 # breaking shape changes; document in docs/dry-run-json.md.
@@ -219,6 +223,33 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
     # ── Step 8: Resolve project description ({DATE}) ──────────────
     project_desc = instance.project.description.replace("{DATE}", date.today().isoformat())
 
+    resolved_views = []
+    for view in template.views:
+        if not view.create:
+            resolved_views.append(view)
+            if view.filter_query:
+                warnings.append(
+                    f"View '{view.name}' is documentation only; its filter_query is not applied"
+                )
+            continue
+        try:
+            resolved_views.append(
+                ViewDefinition.model_validate(
+                    {
+                        **view.model_dump(),
+                        "name": resolve_placeholders(view.name, values),
+                        "filter_query": resolve_placeholders(view.filter_query, values),
+                    }
+                )
+            )
+        except ValidationError as error:
+            raise ConfigError(f"Invalid resolved view '{view.name}': {error}") from error
+    created_names = [view.name for view in resolved_views if view.create]
+    if created_names:
+        require_cloud_views(instance.target)
+        if len(created_names) != len(set(created_names)):
+            raise ConfigError("Views with create: true must have unique resolved names")
+
     # ── Step 9: Assemble ───────────────────────────────────────────
     return ExecutionPlan(
         template_name=template.template.name,
@@ -233,7 +264,7 @@ def plan(template: TemplateDefinition, instance: InstanceConfig) -> ExecutionPla
         fields=resolved_field_defs,
         milestones=resolved_milestones,
         issues=resolved_issues,
-        views=list(template.views),
+        views=resolved_views,
         placeholder_values=dict(values),
         skipped_milestones=sorted(all_skipped_milestones(skip_ms, template)),
         skipped_issues=sorted(all_skipped),
@@ -317,6 +348,16 @@ def format_dry_run(ep: ExecutionPlan) -> str:
         w(f"  {f.id}: {f.name} [{f.type}] ({len(f.options)} options{suffix})")
     w("")
 
+    if ep.views:
+        w(f"Views ({len(ep.views)}):")
+        for view in ep.views:
+            action = "create via REST" if view.create else "documentation only"
+            w(f"  {view.name} [{view.layout}]: {action}")
+            if view.filter_query:
+                label = "filter" if view.create else "filter (documentation; not applied)"
+                w(f"       {label}: {view.filter_query}")
+        w("")
+
     # Warnings
     if ep.warnings:
         w(f"Warnings ({len(ep.warnings)}):")
@@ -335,6 +376,7 @@ def format_dry_run(ep: ExecutionPlan) -> str:
     w(f"  Field values:   {est['field_values']} GraphQL updateProjectV2ItemFieldValue calls")
     w(f"  Body updates:   {est['body_updates']} GraphQL updateIssue calls (cross-ref resolution)")
     w(f"  Dependencies:   {est['dependencies']} GraphQL addBlockedBy calls")
+    w(f"  Views:          {est['views_create']} REST create-view calls")
     w(f"  Total:          ~{total} mutating calls (~{total}s at 1s delay)")
 
     return "\n".join(lines)
@@ -352,7 +394,16 @@ def api_call_estimate(ep: ExecutionPlan) -> dict[str, int]:
     n_deps = sum(len(i.blocked_by) for i in ep.issues)
     n_body_updates = n_issues
     n_add_to_project = n_issues
-    total = n_milestones + n_issues + n_add_to_project + n_field_values + n_body_updates + n_deps
+    n_views = sum(view.create for view in ep.views)
+    total = (
+        n_milestones
+        + n_issues
+        + n_add_to_project
+        + n_field_values
+        + n_body_updates
+        + n_deps
+        + n_views
+    )
     return {
         "milestones": n_milestones,
         "issues_create": n_issues,
@@ -360,6 +411,7 @@ def api_call_estimate(ep: ExecutionPlan) -> dict[str, int]:
         "field_values": n_field_values,
         "body_updates": n_body_updates,
         "dependencies": n_deps,
+        "views_create": n_views,
         "total": total,
     }
 

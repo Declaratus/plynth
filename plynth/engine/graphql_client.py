@@ -100,6 +100,37 @@ class GraphQLClient:
         data = self.execute(queries.GET_REPO_ID, {"owner": owner, "name": name})
         return data["repository"]["id"]
 
+    def get_project_views(self, project_id: str) -> list[dict]:
+        """Read every view before creation/recovery; never infer absence from truncation."""
+        query = """query GetProjectViews($id:ID!,$after:String){
+          node(id:$id){ ... on ProjectV2 {
+            views(first:100,after:$after){ nodes {id name number layout filter}
+              pageInfo {hasNextPage endCursor} }
+          }}
+        }"""
+        views = []
+        after = None
+        cursors: set[str] = set()
+        while True:
+            data = self.execute(query, {"id": project_id, "after": after})
+            try:
+                page = data["node"]["views"]
+                nodes = page["nodes"]
+                info = page["pageInfo"]
+                if not isinstance(nodes, list) or any(node is None for node in nodes):
+                    raise ValueError("Incomplete view nodes")
+                views.extend(nodes)
+                if not info["hasNextPage"]:
+                    return views
+                after = info["endCursor"]
+                if not after or after in cursors:
+                    raise ValueError("Invalid view pagination cursor")
+                cursors.add(after)
+            except (KeyError, TypeError, ValueError) as error:
+                raise PlynthError(
+                    "Cannot read complete Project views; no view is created"
+                ) from error
+
     # ── Phase 1: Project + Fields ──────────────────────────
 
     def create_project(self, owner_id: str, title: str) -> dict:
