@@ -1,0 +1,10 @@
+template: ghec-portfolio-template.yaml
+target: github.com
+org: Declaratus
+values: {}
+repo:
+  name: eyrl
+  create: false
+project:
+  name: Declaratus Portfolio and Intake Pilot
+  description: Cross-repository portfolio hierarchy and intake experiments.

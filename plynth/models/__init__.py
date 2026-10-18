@@ -11,6 +11,7 @@ from plynth.models.state import (
     PHASE_3_ISSUES,
     PHASE_4_PROJECT_ITEMS,
     PHASE_5_REFERENCES_AND_DEPS,
+    PHASE_6_VIEWS,
     PHASE_7_STATE_FILE,
     DependencyEdge,
     FieldState,
@@ -21,6 +22,7 @@ from plynth.models.state import (
     RepoState,
     SkippedItems,
     StateFile,
+    ViewState,
 )
 from plynth.models.template import (
     FieldDefinition,
@@ -60,6 +62,7 @@ __all__ = [
     "RepoState",
     "ProjectState",
     "FieldState",
+    "ViewState",
     "MilestoneState",
     "IssueState",
     "DependencyEdge",
@@ -76,5 +79,6 @@ __all__ = [
     "PHASE_3_ISSUES",
     "PHASE_4_PROJECT_ITEMS",
     "PHASE_5_REFERENCES_AND_DEPS",
+    "PHASE_6_VIEWS",
     "PHASE_7_STATE_FILE",
 ]

@@ -314,6 +314,7 @@ def test_api_call_estimate_keys_and_total(
         "field_values",
         "body_updates",
         "dependencies",
+        "views_create",
         "total",
     }
     assert est["total"] == (
@@ -323,6 +324,7 @@ def test_api_call_estimate_keys_and_total(
         + est["field_values"]
         + est["body_updates"]
         + est["dependencies"]
+        + est["views_create"]
     )
 
 

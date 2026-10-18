@@ -1,0 +1,41 @@
+schema_version: "1.1"
+template:
+  name: GHEC Portfolio and Intake Pilot
+  description: Organization Project fields and views; add existing issues after bootstrap.
+  version: "0.1.0"
+status:
+  - {value: Intake, color: GRAY, default: true}
+  - {value: Needs info, color: YELLOW}
+  - {value: Ready, color: BLUE}
+  - {value: In progress, color: PURPLE}
+  - {value: Blocked, color: RED}
+  - {value: Done, color: GREEN}
+fields:
+  - id: workstream
+    name: Workstream
+    type: single_select
+    options: [Bootstrap, Operations, Portfolio, Intake]
+  - id: audience
+    name: Audience
+    type: single_select
+    options: [Engineering, Program, Product and project managers]
+views:
+  - name: Portfolio
+    layout: table
+    create: true
+    filter_query: 'is:issue'
+    description: Enable Show hierarchy in the UI and add existing repository issues.
+  - name: Intake
+    layout: table
+    create: true
+    filter_query: 'is:issue is:open Status:"Intake"'
+  - name: Delivery
+    layout: board
+    create: true
+    filter_query: 'is:issue is:open'
+    description: Set board columns to Status in the UI.
+  - name: Roadmap
+    layout: roadmap
+    create: true
+    filter_query: 'is:issue'
+    description: Add date fields and configure the roadmap date mapping in the UI.

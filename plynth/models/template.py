@@ -136,6 +136,27 @@ class ViewDefinition(BaseModel):
     filter: ViewFilter | None = None
     visible_fields: list[str] = []
     description: str = ""
+    create: bool = False
+    filter_query: str = ""
+
+    @model_validator(mode="after")
+    def _validate_created_view(self) -> ViewDefinition:
+        if not self.create:
+            return self
+        if not self.name.strip():
+            raise ValueError("A view with create: true must have a non-empty name")
+        unsupported = [
+            key
+            for key in ("group_by", "slice_by", "sort", "filter", "visible_fields")
+            if getattr(self, key)
+        ]
+        if unsupported:
+            raise ValueError(
+                "create: true currently supports name, layout and filter_query only; "
+                f"configure {', '.join(unsupported)} in the UI after creation, or "
+                "keep create: false for a documentation-only view"
+            )
+        return self
 
 
 class PruningRule(BaseModel):
@@ -188,7 +209,8 @@ class TemplateDefinition(BaseModel):
     # See docs/plynth-design-spec.md#schema-versioning for the cadence.
     # A template that omits `schema_version` is parsed as "1.0" (pre-M1).
     # M1+ features (`defaults`, rich `FieldOption`, `reconciliation`) should
-    # declare `schema_version: "1.1"`; today the engine accepts them either
+    # declare `schema_version: "1.1"`; the additive cloud view extension
+    # (`create`, `filter_query`) also uses that line. The engine accepts them either
     # way, but the table is the source of truth for what each version adds.
     schema_version: str = "1.0"
     template: TemplateMetadata
