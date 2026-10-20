@@ -9,6 +9,7 @@ for directories on Windows.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -16,6 +17,13 @@ import pytest
 
 from plynth import cli
 from plynth.errors import ConfigError
+
+# root bypasses directory permission bits, so chmod cannot lock a directory
+# against it (common in containers and some CI runners).
+skip_if_root = pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root bypasses directory permission bits.",
+)
 
 
 def test_resolves_to_absolute_path(tmp_path: Path) -> None:
@@ -73,6 +81,7 @@ def test_probe_leaves_no_artifacts(tmp_path: Path) -> None:
     sys.platform == "win32",
     reason="POSIX-only: Path.chmod cannot reliably make a directory unwritable on Windows.",
 )
+@skip_if_root
 def test_rejects_unwritable_existing_directory(tmp_path: Path) -> None:
     locked = tmp_path / "locked"
     locked.mkdir()
@@ -88,6 +97,7 @@ def test_rejects_unwritable_existing_directory(tmp_path: Path) -> None:
     sys.platform == "win32",
     reason="POSIX-only: the W_OK-without-X_OK gap can only be set up via chmod.",
 )
+@skip_if_root
 def test_rejects_writable_but_unsearchable_directory(tmp_path: Path) -> None:
     """The exact case os.access misses: write bit set, but kernel rejects open()."""
     no_search = tmp_path / "no-search"
