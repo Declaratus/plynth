@@ -1,0 +1,104 @@
+name: Live run
+
+# Runs plynth against a live organization from a manual trigger, so live runs
+# work from places that cannot call the GitHub API directly (such as Claude
+# Code cloud sessions). See docs/live-runs.md for setup.
+#
+# dry-run plans offline and needs no credentials. create and resolve write to
+# the target and run in the live-write environment, which should require a
+# reviewer. Logs and artifacts of public repositories are public: only point
+# this at an organization holding synthetic data.
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "dry-run plans offline; create and resolve write to the target"
+        type: choice
+        options: [dry-run, create, resolve]
+        default: dry-run
+      template:
+        description: Template YAML path in the repository
+        required: true
+      instance:
+        description: Instance config YAML path in the repository
+        required: true
+      state_run_id:
+        description: Run ID whose plynth-state artifact to resume from (required for resolve)
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: live-run
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: plynth ${{ inputs.command }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.command == 'dry-run' && 'live-read' || 'live-write' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install plynth from this ref
+        run: python -m pip install .
+
+      - name: Download state to resume from
+        if: inputs.state_run_id != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: plynth-state
+          path: state
+          run-id: ${{ inputs.state_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Mint GitHub App token
+        id: app
+        if: inputs.command != 'dry-run' && vars.LIVE_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.LIVE_APP_ID }}
+          private-key: ${{ secrets.LIVE_APP_PRIVATE_KEY }}
+          owner: ${{ vars.LIVE_APP_OWNER }}
+
+      - name: Run plynth
+        env:
+          COMMAND: ${{ inputs.command }}
+          TEMPLATE: ${{ inputs.template }}
+          INSTANCE: ${{ inputs.instance }}
+          PLYNTH_TOKEN: ${{ inputs.command != 'dry-run' && (steps.app.outputs.token || secrets.LIVE_TOKEN) || '' }}
+        run: |
+          mkdir -p state
+          case "$COMMAND" in
+            dry-run)
+              plynth create --template "$TEMPLATE" --instance "$INSTANCE" --dry-run
+              ;;
+            create)
+              plynth create --template "$TEMPLATE" --instance "$INSTANCE" --state-dir state
+              ;;
+            resolve)
+              state_file=$(find state -name '*.plynth-state.yaml' -print -quit)
+              if [ -z "$state_file" ]; then
+                echo "::error::resolve needs state_run_id pointing at a run with a plynth-state artifact"
+                exit 2
+              fi
+              plynth resolve --state "$state_file" --template "$TEMPLATE" --instance "$INSTANCE"
+              ;;
+          esac
+
+      - name: Upload state
+        if: always() && inputs.command != 'dry-run'
+        uses: actions/upload-artifact@v7
+        with:
+          name: plynth-state
+          path: state/*.plynth-state.yaml
+          if-no-files-found: ignore
+          retention-days: 30
