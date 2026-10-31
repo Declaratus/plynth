@@ -62,10 +62,10 @@ jobs:
 
       - name: Mint GitHub App token
         id: app
-        if: inputs.command != 'dry-run' && vars.LIVE_APP_ID != ''
-        uses: actions/create-github-app-token@v2
+        if: inputs.command != 'dry-run' && vars.LIVE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.LIVE_APP_ID }}
+          client-id: ${{ vars.LIVE_APP_CLIENT_ID }}
           private-key: ${{ secrets.LIVE_APP_PRIVATE_KEY }}
           owner: ${{ vars.LIVE_APP_OWNER }}
 

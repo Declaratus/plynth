@@ -45,9 +45,9 @@ organization even with a wrong config.
    and issue dependencies are covered by **Issues**.
 2. Install it on the target organization only, and only on the repositories
    plynth writes issues to.
-3. In this repository, set variables `LIVE_APP_ID` (the app ID) and
-   `LIVE_APP_OWNER` (the organization login), and secret
-   `LIVE_APP_PRIVATE_KEY` (a private key generated for the app).
+3. In this repository, set variables `LIVE_APP_CLIENT_ID` (the app's client
+   ID, not its numeric app ID) and `LIVE_APP_OWNER` (the organization login),
+   and secret `LIVE_APP_PRIVATE_KEY` (a private key generated for the app).
 
 **Fine-grained personal access token.** Set secret `LIVE_TOKEN` to a token
 whose resource owner is the target organization, with the same permissions as
