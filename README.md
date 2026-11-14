@@ -232,7 +232,7 @@ The architecture and design decisions are in [docs/plynth-design-spec.md](docs/p
 
 ## Status
 
-plynth is in beta (version 0.4.0). GitHub.com is the primary target. A full run has been confirmed against GitHub Enterprise Server 3.19.
+plynth is in beta. GitHub.com is the primary target. A full run has not been confirmed against every GitHub Enterprise Server version.
 
 plynth only creates new Projects. It does not compare an existing Project with the template, update one, or delete anything.
 
