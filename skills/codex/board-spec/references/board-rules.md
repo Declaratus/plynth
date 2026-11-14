@@ -23,6 +23,7 @@ Platform facts below were captured on 2026-11-14 from GitHub's changelog and doc
 - Visibility decides ownership. Org owners and org-installed apps can read every Project in the org. If an audience must never see some work, that work goes in a Project owned somewhere the audience has no reach (another org or a user account), with its issues in a repo they cannot read.
 - Say for each Project: owner, owner type (org or user), visibility (private or public), base role, who is invited, and the plan that sets its auto-add cap.
 - Reuse an existing Project when it already holds the right items and has no conflicting fields. Say which, and what gets cleaned up.
+- When a Project's repos live in other orgs, say who can read them and what a reader without access sees (redacted items, a broken tree). Do this even when the Project itself is still an open decision.
 
 ## Items
 
