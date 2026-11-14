@@ -1,0 +1,4 @@
+interface:
+  display_name: "Board Spec"
+  short_description: "Turn one program into a short GitHub Projects board spec"
+  default_prompt: "Use $board-spec to write a GitHub Projects board spec for this program."
