@@ -1,274 +1,255 @@
 # plynth
 
+plynth is a command-line tool for teams that set up the same GitHub Project many times. You describe the plan once as a YAML template, and plynth creates the Project, milestones, real issues, field values, and issue dependencies on GitHub.com or GitHub Enterprise Server.
+
 [![CI](https://github.com/Declaratus/plynth/actions/workflows/ci.yml/badge.svg)](https://github.com/Declaratus/plynth/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 
-**Declarative project plans, materialized as GitHub Projects (and other backends).**
+Without plynth, you copy a template Project by hand, convert draft items to issues, assign milestones, replace placeholder text, and link dependencies. plynth does those steps from two files:
 
-## What this project is
-
-A Python CLI tool that bootstraps fully populated GitHub Projects from declarative YAML templates.
-
-**Primary target:** GitHub.com (Projects v2 + Issues).
-**Supported target:** GitHub Enterprise Server (GHES) 3.19.
-
-plynth replaces a manual 30-60 minute process of copying project templates, converting draft issues to real issues, assigning milestones, replacing placeholder tokens, and wiring cross-reference dependencies. It reads a **template definition** (YAML) and an **instance config** (YAML), then orchestrates GraphQL/REST mutations to produce a project with real issues, milestones assigned, placeholders resolved, field values set, and dependency relationships wired.
+- A **template**: the reusable plan, with placeholders such as `{APP}`.
+- An **instance config**: the values for one project, plus the target org and repository.
 
 ## Install
 
 ```bash
-pipx install plynth        # recommended for use as a CLI
-pip install plynth         # for use as a library / one-shot
+pipx install plynth
 ```
 
-Releases are published from this repo to PyPI on every `v*` tag; GitHub
-Releases include the matching wheel + sdist.
+<details>
+<summary>Other install methods</summary>
 
-## Configuration: target
+Install with pip:
 
-Set `target` in your instance YAML to point plynth at GitHub.com or a GHES
-host:
-
-```yaml
-target: github.com                       # or omit for the same default
-target: https://api.github.com           # equivalent
-target: https://ghes.example.com         # GHES — REST under /api/v3
+```bash
+pip install plynth
 ```
 
-Authenticate with `PLYNTH_TOKEN` (or `--token`). On github.com, a
-fine-grained PAT with repository *Issues: Read and write* + organization
-*Projects: Read and write* is the recommended shape. Classic PATs with
-`repo` + `project` scopes work end-to-end on either target. Full
-breakdown in [SECURITY.md](SECURITY.md#token-handling). `GHES_TOKEN` is
-accepted for one release with a deprecation warning.
+Install from a clone of this repository:
 
-**Confirmed:** GHES 3.19 + FGPAT (2026-05). See
-[SECURITY.md](SECURITY.md#token-handling) for the permission set that
-worked.
-
-## Technology stack
-
-- Python 3.9+ (must run on RHEL 8/9)
-- PyYAML -- YAML parsing
-- Pydantic v2 -- typed config models, validation, JSON Schema generation
-- requests -- HTTP client (GraphQL + REST)
-- No heavy GQL library -- raw queries via requests against `/api/graphql`
-
-## Project structure
-
-```
-plynth/
-  __init__.py
-  cli.py              # CLI entry point (argparse or click)
-  models/
-    __init__.py
-    template.py        # Pydantic models for template YAML
-    instance.py        # Pydantic models for instance config YAML
-    state.py           # Pydantic models for state/mapping file
-  engine/
-    __init__.py
-    planner.py         # Validates config, builds effective issue list, resolves placeholders
-    graphql_client.py  # GraphQL client (queries + mutations against GHES)
-    rest_client.py     # REST client (milestone creation only)
-    phases.py          # Phase 1-7 orchestration
-  queries/
-    __init__.py
-    mutations.py       # GraphQL mutation strings
-    queries.py         # GraphQL query strings
-  utils/
-    __init__.py
-    references.py      # Cross-reference resolution ({PREFIX}-### → #number)
-README.md
-pyproject.toml
+```bash
+pip install .
 ```
 
-> Example templates, instance configs, and the full design spec are being prepared in a follow-up sanitization pass and are not yet included in the repository.
+</details>
 
-## Backend constraints (GHES 3.19 baseline; GHEC exceptions noted)
+plynth needs Python 3.9 or later. CI tests Python 3.9 through 3.12.
 
-These constraints describe the implemented backend paths. GitHub.com/GHEC
-capabilities evolve independently from GHES releases; see the dated
-[capability review](docs/ghec-capabilities.md) before extending them.
+## Quick start
 
-1. **GraphQL-first with specific REST operations.** Milestone creation, optional repository creation, GHES version detection, and opted-in GHEC Project view creation use REST. Project creation and issue/field operations retain their GraphQL paths.
+1. Save a template as `template.yaml`:
 
-2. **Issue creation via GraphQL `createIssue`.** Supports `milestoneId` at creation time. Do NOT use `projectIds` on `CreateIssueInput` -- Project V2 requires `addProjectV2ItemById` then `updateProjectV2ItemFieldValue` as separate calls.
+   ```yaml
+   template:
+     name: "Service launch"
+     description: "Two-issue starter plan."
+     version: "1.0.0"
 
-3. **Dependencies via `addBlockedBy` / `removeBlockedBy`.** NOT `addIssueDependency` (doesn't exist). Normalization: `blocked_by: X` → `addBlockedBy(issueId=self, blockingIssueId=X)`. `blocks: Y` → `addBlockedBy(issueId=Y, blockingIssueId=self)`. Requires repository issues, not drafts.
+   placeholders:
+     APP: {description: "Service name", example: "Acme", required: true}
+     PREFIX: {description: "Cross-reference prefix", example: "ACME", required: true}
 
-4. **Views depend on the target.** GHES 3.19 views remain declarative documentation. On GitHub.com/GHEC, set `create: true` on a view to create its name, layout and `filter_query` through the Projects REST API. Grouping, sorting, visible fields and Show hierarchy remain UI setup in this first implementation. Existing templates default to `create: false`. [Details and example](docs/ghec-capabilities.md#opt-in-project-views).
+   fields:
+     - id: priority
+       name: "Priority"
+       type: single_select
+       options: ["P1", "P2"]
 
-5. **Bootstrap-only in v1.** No reconciliation, no destructive updates. Re-runs should be safe (idempotent where possible) but the tool does not diff desired vs actual state.
+   milestones:
+     - id: M1
+       title: "{APP} foundation"
+       description: "Get {APP} ready to run."
+       due_offset_weeks: 2
 
-6. **Serial writes, 1-second delay between mutations.** GHES GraphQL rate limits are disabled by default but the engine honors `Retry-After` defensively. Delay is configurable.
+   issues:
+     - template_id: "001"
+       title: "Create the {APP} repository"
+       milestone_id: M1
+       fields: {priority: "P1"}
+       body: "Set up the repository for {APP}."
+     - template_id: "002"
+       title: "Write the {APP} runbook"
+       milestone_id: M1
+       fields: {priority: "P2"}
+       blocked_by: ["001"]
+       body: "Start after {PREFIX}-001 is done."
+   ```
 
-7. **Items cannot be added and updated in the same call.** Must `addProjectV2ItemById` first, then `updateProjectV2ItemFieldValue` separately.
+2. Save an instance config as `instance.yaml`:
 
-8. **`updateProjectV2ItemFieldValue` cannot set Assignees, Labels, Milestone, or Repository.** Those are issue-level properties handled via `createIssue` or `updateIssue`.
+   ```yaml
+   template: template.yaml
+   target: github.com
+   org: example-org
+   values:
+     APP: "Acme"
+     PREFIX: "ACME"
+   repo:
+     name: acme
+   project:
+     name: "Acme launch"
+   start_date: "2026-11-02"
+   ```
 
-## Execution phases (strict order)
+3. Preview the plan. A dry run needs no token and makes no API calls:
 
-```
-Phase 1: Validate config → resolve owner/repo IDs → createProjectV2 → createProjectV2Field → re-query field/option IDs
-Phase 2: POST /repos/{owner}/{repo}/milestones (REST) → store number + node_id
-Phase 3: createIssue (GraphQL, with milestoneId) → capture issue number + node_id per template_id
-Phase 4: addProjectV2ItemById → updateProjectV2ItemFieldValue (per field per issue)
-Phase 5: Resolve {PREFIX}-### → #real_number in issue bodies via updateIssue → addBlockedBy per dependency edge
-Phase 6: Create opted-in GHEC views (REST); otherwise skip
-Phase 7: Write state file
-```
+   ```bash
+   plynth create --template template.yaml --instance instance.yaml --dry-run
+   ```
 
-State file is checkpointed after each phase so partial failures can resume.
+   ```text
+   === plynth Execution Plan ===
+   Template: Service launch (1.0.0)
+   Target:   github.com / example-org / acme
+   Project:  Acme launch
 
-## Key GraphQL mutations
+   Milestones (1):
+     M1: Acme foundation (due: 2026-11-16)
 
-```graphql
-# Phase 1
-mutation CreateProject($ownerId: ID!, $title: String!) {
-  createProjectV2(input: {ownerId: $ownerId, title: $title}) {
-    projectV2 { id number url }
-  }
-}
+   Issues (2):
+     001: Create the Acme repository [M1] [P1]
+          blocked_by: (none) | blocks: (none)
+     002: Write the Acme runbook [M1] [P2]
+          blocked_by: 001 | blocks: (none)
 
-mutation CreateField($projectId: ID!, $name: String!, $dataType: ProjectV2CustomFieldType!, $options: [ProjectV2SingleSelectFieldOptionInput!]) {
-  createProjectV2Field(input: {projectId: $projectId, name: $name, dataType: $dataType, singleSelectOptions: $options}) {
-    projectV2Field { ... on ProjectV2SingleSelectField { id name options { id name } } }
-  }
-}
+   Fields (1):
+     priority: Priority [single_select] (2 options)
 
-# Phase 3
-mutation CreateIssue($repositoryId: ID!, $title: String!, $body: String!, $milestoneId: ID) {
-  createIssue(input: {repositoryId: $repositoryId, title: $title, body: $body, milestoneId: $milestoneId}) {
-    issue { id number title }
-  }
-}
+   API call estimate:
+     Milestones:     1 REST calls
+     Issues:         2 GraphQL createIssue calls
+     Add to project: 2 GraphQL addProjectV2ItemById calls
+     Field values:   2 GraphQL updateProjectV2ItemFieldValue calls
+     Body updates:   2 GraphQL updateIssue calls (cross-ref resolution)
+     Dependencies:   1 GraphQL addBlockedBy calls
+     Views:          0 REST create-view calls
+     Total:          ~10 mutating calls (~10s at 1s delay)
+   ```
 
-# Phase 4
-mutation AddItemToProject($projectId: ID!, $contentId: ID!) {
-  addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-    item { id }
-  }
-}
+For a template that uses every schema feature, see [docs/example-template.yaml](docs/example-template.yaml) and its [instance config](docs/example-instance.yaml).
 
-mutation SetFieldValue($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-  updateProjectV2ItemFieldValue(input: {projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: {singleSelectOptionId: $optionId}}) {
-    projectV2Item { id }
-  }
-}
+## Usage
 
-# Phase 5
-mutation UpdateIssueBody($issueId: ID!, $body: String!) {
-  updateIssue(input: {id: $issueId, body: $body}) {
-    issue { id }
-  }
-}
+### Create the Project
 
-mutation AddBlockedBy($issueId: ID!, $blockingIssueId: ID!) {
-  addBlockedBy(input: {issueId: $issueId, blockingIssueId: $blockingIssueId}) {
-    issue { id }
-    blockingIssue { id }
-  }
-}
-```
+The repository named in `repo.name` must already exist, unless you set `repo.create: true`. Set a token, then run `create` without `--dry-run`:
 
-## Key GraphQL queries
-
-```graphql
-# Preflight: resolve org and repo IDs
-query GetOrgId($login: String!) {
-  organization(login: $login) { id }
-}
-
-query GetRepoId($owner: String!, $name: String!) {
-  repository(owner: $owner, name: $name) { id }
-}
-
-# After field creation: re-query field and option IDs
-query GetProjectFields($projectId: ID!) {
-  node(id: $projectId) {
-    ... on ProjectV2 {
-      fields(first: 20) {
-        nodes {
-          ... on ProjectV2SingleSelectField {
-            id name options { id name }
-          }
-          ... on ProjectV2Field {
-            id name
-          }
-        }
-      }
-    }
-  }
-}
+```bash
+read -rs PLYNTH_TOKEN && export PLYNTH_TOKEN
+plynth create --template template.yaml --instance instance.yaml
 ```
 
-## Implementation order for Phase B
+plynth writes a state file named after the project, such as `acme-launch.plynth-state.yaml`, in the current directory. Use `--state-dir` to write it somewhere else. The state file records the ID of everything plynth created.
 
-Build in this order. Each step should be testable independently.
+### Resume after a failure
 
-1. **Pydantic models** (`models/template.py`, `models/instance.py`, `models/state.py`)
-   - Template: placeholders, fields, milestones, issues (with blocked_by/blocks), views, pruning rules
-   - Instance: values, repo config, skip_milestones, skip_issues, field_overrides, api settings
-   - State: run metadata, project/field/milestone/issue ID mappings, phase checkpoints, errors
-   - Include `template_sha256` guard on state file
-   - Include `body_sha256` per issue in state for re-resolve detection
+plynth saves the state file after each phase. If a run fails, fix the cause and run the same `create` command again. Completed phases are skipped. plynth refuses to resume if the template changed since the state file was created.
 
-2. **Planner** (`engine/planner.py`)
-   - Load and validate template + instance config
-   - Resolve placeholders in titles, bodies, field options
-   - Build effective issue list (apply skip_milestones, skip_issues, pruning rules)
-   - Validate dependency graph (warn if blocked_by target was removed)
-   - Dry-run mode: print execution plan and exit
+### Re-resolve cross-references
 
-3. **GraphQL client** (`engine/graphql_client.py`)
-   - Single `requests.Session` with auth header
-   - Generic `execute(query, variables)` method
-   - Configurable write delay between mutations
-   - `Retry-After` / rate-limit header handling
-   - All mutation strings in `queries/mutations.py`
+`resolve` re-runs only the step that replaces `{PREFIX}-###` references with real issue numbers and links dependencies:
 
-4. **REST client** (`engine/rest_client.py`)
-   - Milestone creation only
-   - Same session/auth pattern as GraphQL client
-   - Same write delay and retry logic
+```bash
+plynth resolve --state acme-launch.plynth-state.yaml --template template.yaml --instance instance.yaml
+```
 
-5. **Phase orchestration** (`engine/phases.py`)
-   - Phase 1: create project + fields + re-query IDs
-   - Phase 2: create milestones (REST)
-   - Phase 3: create issues (GraphQL)
-   - Phase 4: add to project + set field values
-   - Phase 5: resolve cross-refs + wire dependencies
-   - Phase 7: emit state file
-   - Checkpoint state file after each phase
-   - Resume logic: check state file phases, skip completed phases
+### Feed the plan to other tools
 
-6. **CLI** (`cli.py`)
-   - `plynth create --template <path> --instance <path> [--dry-run [--format text|json]]`
-   - `plynth resolve --state <path>` (re-run Phase 5 only)
-   - Auth via `PLYNTH_TOKEN` env var or `--token` flag
-   - JSON dry-run: stable schema for piping plans into other tools.
-     See [docs/dry-run-json.md](docs/dry-run-json.md).
+`--format json` prints the dry-run plan in a stable schema for CI checks or bots:
 
-## What NOT to build in Phase B
+```bash
+plynth create --template template.yaml --instance instance.yaml --dry-run --format json \
+  | jq '.api_call_estimate.total'
+```
 
-- GHES 3.19 view automation; advanced GHEC view configuration
-- Drift detection / reconciliation (Phase E)
-- GitHub Action wrapper (Phase D)
-- Destructive operations (delete issues, remove fields)
-- GitHub App authentication (PAT is sufficient for v1)
+```text
+10
+```
 
-## Roadmap
+The schema and its versioning policy are documented in [docs/dry-run-json.md](docs/dry-run-json.md).
 
-Active work and milestones: <https://github.com/Declaratus/plynth/milestones>
+Run `plynth --help` or `plynth create --help` for every command and flag.
 
-Browse open issues by area:
+## Configuration
 
-- [Features](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22type%3Afeature%22)
-- [Good first issues](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22good-first-issue%22)
-- [Help wanted](https://github.com/Declaratus/plynth/issues?q=is%3Aissue+is%3Aopen+label%3A%22help-wanted%22)
+### Target
 
-Recent themes: github.com support and PyPI publishing (v0.3.0); rich
-field options, repo creation, GHES version detection, and JSON
-dry-run output (v0.4.0); drift detection and a GitHub Action wrapper
-remain on the post-0.4 list.
+Set `target` in the instance config. It is required.
+
+| Value | Connects to |
+| --- | --- |
+| `github.com` or `https://api.github.com` | GitHub.com |
+| `https://<your-ghes-host>` | GitHub Enterprise Server (GraphQL at `/api/graphql`, REST at `/api/v3`) |
+
+plynth rejects `https://github.com`, `http://` URLs, and bare host names, and tells you which value to use instead.
+
+### Token
+
+plynth reads the token from `PLYNTH_TOKEN`. You can also pass `--token`, but plynth warns that the token then shows up in shell history and process listings.
+
+On GitHub.com, the recommended token is a fine-grained personal access token with these permissions:
+
+- Repository: **Issues** (read and write)
+- Organization: **Projects** (read and write)
+
+Classic tokens with the `repo` and `project` scopes work on either target. See [SECURITY.md](SECURITY.md#token-handling) for:
+
+- The full permission breakdown.
+- What `repo.create: true` adds.
+- The GitHub Enterprise Server 3.19 caveat.
+
+The older `GHES_TOKEN` variable still works but prints a deprecation warning.
+
+### Command options
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--state-dir` | `.` | Directory for the state file. It must already exist. |
+| `--write-delay-ms` | `1000` | Pause between API writes, 0 to 30000 ms (`create` only). |
+| `--timeout-seconds` | `30` | Timeout for each HTTP request. |
+| `-v`, `--verbose` | off | Debug logging. |
+
+Template features are documented in separate files:
+
+- Single-select options: [docs/options.md](docs/options.md).
+- The Status field: [docs/options.md](docs/options.md#status-field).
+- Placeholders, milestones, issues, and dependencies: [the annotated example template](docs/example-template.yaml).
+
+## How it works
+
+plynth runs these phases in order and saves the state file after each one:
+
+1. Create the Project and its custom fields.
+2. Create repository milestones.
+3. Create issues, with their milestones.
+4. Add the issues to the Project and set field values.
+5. Replace `{PREFIX}-###` references in issue bodies with real issue numbers, and link `blocked_by` and `blocks` dependencies.
+6. Create views, when the template opts in (GitHub.com only; see [Status](#status)).
+7. Write the final state file.
+
+The architecture and design decisions are in [docs/plynth-design-spec.md](docs/plynth-design-spec.md).
+
+## Status
+
+plynth is in beta. GitHub.com is the primary target. A full run has not been confirmed against every GitHub Enterprise Server version.
+
+plynth only creates new Projects. It does not compare an existing Project with the template, update one, or delete anything.
+
+Known limitations:
+
+- **Views on GitHub Enterprise Server.** Views in a template are documentation only. Set them up in the GitHub UI.
+- **Views on GitHub.com.** On the `main` branch, but not in a release yet, `views[].create: true` creates a view's name, layout, and filter. Grouping, sorting, and visible fields are still set in the UI. See [docs/ghec-capabilities.md](docs/ghec-capabilities.md#opt-in-project-views).
+- **Custom field types.** plynth creates single-select fields only. The template schema also accepts `text`, `number`, `date`, and `iteration`, but plynth does not create those fields, and it logs a warning and skips any issue values set on them.
+- **Multi-select fields.** These are not supported.
+- **GitHub App sign-in.** plynth cannot sign in as a GitHub App by itself. To use an app, mint a token yourself and pass it in `PLYNTH_TOKEN`.
+
+Planned work is tracked in the [milestones](https://github.com/Declaratus/plynth/milestones), and changes are listed in the [CHANGELOG](CHANGELOG.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, and the pull request flow. Report security issues privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+[Apache-2.0](LICENSE)

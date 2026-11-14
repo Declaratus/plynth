@@ -24,6 +24,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Rewrite the README as a landing page: a quick start with a dry run that
+  needs no token, usage for `create`, `resolve`, and JSON output, a
+  configuration reference, current status and limitations, and links to the
+  design docs that now hold the API and implementation detail.
 - Scope README API constraints to the GHES baseline and implemented paths,
   rather than assuming cloud Projects capabilities match GHES 3.19.
 - States that use views declare schema `1.1`; runs without views preserve
