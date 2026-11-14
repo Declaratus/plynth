@@ -18,6 +18,7 @@ once the core implementation is stable.
 | [api-client-spec.md](api-client-spec.md) | Implementation spec for `plynth/engine/api_base.py`, `graphql_client.py`, `rest_client.py`, `queries/`: GraphQL mutation/query strings, retry logic, write delay, error handling | Implementing or debugging API clients |
 | [example-template.yaml](example-template.yaml) | Complete reference template: "Application Service Onboarding" (17 issues, 5 milestones, 4 custom fields). Demonstrates all schema features | Writing tests, adding new template features, understanding template structure |
 | [example-instance.yaml](example-instance.yaml) | Instance config for example-template.yaml with M2 skipped | Writing tests, understanding instance config structure |
+| [live-runs.md](live-runs.md) | Setup and use of the manually triggered `live-run.yml` workflow | Running plynth against a live organization from a host without direct API access |
 
 ---
 
