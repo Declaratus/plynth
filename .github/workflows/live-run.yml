@@ -1,13 +1,25 @@
 name: Live run
+# Every input is in the run name, so a live-write reviewer sees them on the
+# pending-approval screen. github.ref is the full ref (refs/heads/main), so a
+# tag named main cannot pass for the branch.
+run-name: "Live run ${{ inputs.command }} on ${{ github.ref }}: template=${{ inputs.template }} instance=${{ inputs.instance }} state_run_id=${{ inputs.state_run_id }}"
 
 # Runs plynth against a live organization from a manual trigger, so live runs
 # work from places that cannot call the GitHub API directly (such as Claude
 # Code cloud sessions). See docs/live-runs.md for setup.
 #
-# dry-run plans offline and needs no credentials. create and resolve write to
-# the target and run in the live-write environment, which should require a
-# reviewer. Logs and artifacts of public repositories are public: only point
-# this at an organization holding synthetic data.
+# dry-run plans offline and needs no credentials; live-read holds no secrets.
+# create and resolve write to the target and run in the live-write
+# environment, which must require a reviewer and only deploy from main. The
+# write credentials (LIVE_APP_PRIVATE_KEY, LIVE_TOKEN) are environment secrets
+# of live-write only, never repository or organization secrets, so only a job
+# running in live-write can read them. Before a write token is minted, the run
+# checks that the instance file targets github.com (plynth sends its token to
+# the instance's target host) and, with the GitHub App, that its org is
+# LIVE_APP_OWNER. A state artifact is only used if the run that uploaded it
+# was approved for live-write, so it ran this workflow from the head of main.
+# Logs and artifacts of public repositories are public: only point this at an
+# organization holding synthetic data.
 
 on:
   workflow_dispatch:
@@ -42,6 +54,16 @@ jobs:
     timeout-minutes: 30
     environment: ${{ inputs.command == 'dry-run' && 'live-read' || 'live-write' }}
     steps:
+      # Canary for the read path: a write credential visible here comes from a
+      # repository, organization or live-read secret. Only the boolean is
+      # evaluated, so no secret value reaches the log.
+      - name: Check no write credential is visible
+        if: inputs.command == 'dry-run'
+        env:
+          STRAY: ${{ secrets.LIVE_TOKEN != '' || secrets.LIVE_APP_PRIVATE_KEY != '' || vars.LIVE_APP_CLIENT_ID != '' || vars.LIVE_APP_OWNER != '' }}
+        run: |
+          [ "$STRAY" != true ] || { echo "::error::A write credential or GitHub App setting is visible outside live-write (repository, organization or live-read secret or variable); delete that copy"; exit 2; }
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
@@ -51,6 +73,67 @@ jobs:
       - name: Install plynth from this ref
         run: python -m pip install .
 
+      - name: Check the state run is a Live run approved for live-write
+        if: inputs.state_run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE_RUN_ID: ${{ inputs.state_run_id }}
+        run: |
+          case "$STATE_RUN_ID" in
+            ''|*[!0-9]*)
+              echo "::error::state_run_id must be a run ID (digits only)"
+              exit 2
+              ;;
+          esac
+          run_json=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STATE_RUN_ID")
+          run_path=$(jq -r '.path // ""' <<<"$run_json")
+          run_branch=$(jq -r '.head_branch // ""' <<<"$run_json")
+          run_event=$(jq -r '.event // ""' <<<"$run_json")
+          run_repo=$(jq -r '.head_repository.full_name // ""' <<<"$run_json")
+          run_sha=$(jq -r '.head_sha // ""' <<<"$run_json")
+          fail() {
+            echo "::error::state_run_id $STATE_RUN_ID must be a create or resolve Live run on main in this repository, approved for live-write: $1"
+            exit 2
+          }
+          # path may carry the workflow's ref as a suffix
+          # (.github/workflows/live-run.yml@main): compare the part before the
+          # first @ exactly.
+          [ "${run_path%%@*}" = .github/workflows/live-run.yml ] || fail "its workflow is $run_path"
+          # head_branch is the bare ref name: a run dispatched on a tag named
+          # main also reads "main". The approval check below rules that out.
+          [ "$run_branch" = main ] || fail "its branch is $run_branch"
+          [ "$run_event" = workflow_dispatch ] || fail "its event is $run_event"
+          [ "$run_repo" = "$GITHUB_REPOSITORY" ] || fail "it ran in $run_repo"
+          # The run's commit must be the head of main or an ancestor of it.
+          # That alone does not mean the commit was reviewed: the commits of a
+          # branch merged with a merge commit or by rebase join main's history
+          # too, and only the pull request's final diff was approved. Compare
+          # against main's SHA from the branches API, never the name main,
+          # which a tag of that name would shadow.
+          case "$run_sha" in
+            ''|*[!0-9a-f]*) fail "its commit is '$run_sha'" ;;
+          esac
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha) ||
+            { echo "::error::Could not read the head of main"; exit 2; }
+          case "$main_sha" in
+            ''|*[!0-9a-f]*) echo "::error::Could not read the head of main"; exit 2 ;;
+          esac
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$run_sha...$main_sha?per_page=1" --jq .status) ||
+            fail "its commit $run_sha could not be compared with main"
+          [ "$status" = identical ] || [ "$status" = ahead ] ||
+            fail "its commit $run_sha is not on main (compare status: $status)"
+          # The run's review history must hold an approval for live-write.
+          # live-write only deploys from the main branch, so an approved run
+          # ran this workflow from the head of main when it was dispatched (a
+          # reviewed version), as create or resolve, the only commands that
+          # upload state. A run on a tag named main, a dry-run, or a run with
+          # no environment has no such approval.
+          approved=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STATE_RUN_ID/approvals" \
+            --jq '[.[] | select(.state == "approved") | .environments[]? | .name | strings | ascii_downcase] | any(. == "live-write")') ||
+            fail "its review history could not be read"
+          [ "$approved" = true ] ||
+            fail "it has no approval for the live-write environment"
+
       - name: Download state to resume from
         if: inputs.state_run_id != ''
         uses: actions/download-artifact@v8
@@ -59,6 +142,64 @@ jobs:
           path: state
           run-id: ${{ inputs.state_run_id }}
           github-token: ${{ github.token }}
+
+      - name: Check template and instance are tracked files
+        env:
+          TEMPLATE: ${{ inputs.template }}
+          INSTANCE: ${{ inputs.instance }}
+          # Paths are literal: no glob or pathspec magic in the checks below.
+          GIT_LITERAL_PATHSPECS: "1"
+        run: |
+          # template and instance must be files tracked at this ref, never a
+          # path into the downloaded state or outside the checkout. -f rules
+          # out a tracked directory, which git ls-files also matches.
+          { git ls-files --error-unmatch -- "$TEMPLATE" >/dev/null 2>&1 && [ -f "$TEMPLATE" ]; } ||
+            { echo "::error::template must be a file tracked in this repository"; exit 2; }
+          { git ls-files --error-unmatch -- "$INSTANCE" >/dev/null 2>&1 && [ -f "$INSTANCE" ]; } ||
+            { echo "::error::instance must be a file tracked in this repository"; exit 2; }
+
+      # plynth sends its token to the API host derived from the instance's
+      # target. Read the file with plynth's own loader, so this check and
+      # plynth agree on the host, and stop before any token is minted unless
+      # it is github.com. With the GitHub App, the org must also be
+      # LIVE_APP_OWNER.
+      - name: Check the instance targets github.com
+        if: inputs.command != 'dry-run'
+        shell: python -I {0}
+        env:
+          INSTANCE: ${{ inputs.instance }}
+          LIVE_APP_OWNER: ${{ vars.LIVE_APP_OWNER }}
+        run: |
+          import os
+          import sys
+
+          from plynth.cli import _load_instance
+          from plynth.engine.api_base import derive_api_roots
+          from plynth.errors import PlynthError
+
+          path = os.environ["INSTANCE"]
+          expected_org = os.environ.get("LIVE_APP_OWNER", "")
+          try:
+              instance = _load_instance(path)
+          except (PlynthError, OSError) as e:
+              print(f"::error::Instance {path!r} does not load")
+              print(e)
+              sys.exit(2)
+          rest_base = derive_api_roots(instance.target)[1]
+          if rest_base != "https://api.github.com":
+              print(
+                  f"::error::Instance target is {instance.target!r} (API host "
+                  f"{rest_base!r}): live runs only write to github.com, "
+                  f"because plynth sends the write token to the target host"
+              )
+              sys.exit(2)
+          if expected_org and instance.org.lower() != expected_org.lower():
+              print(
+                  f"::error::Instance org is {instance.org!r}, but "
+                  f"LIVE_APP_OWNER on live-write is {expected_org!r}"
+              )
+              sys.exit(2)
+          print(f"Instance targets github.com, org {instance.org!r}")
 
       - name: Mint GitHub App token
         id: app
@@ -76,7 +217,17 @@ jobs:
           INSTANCE: ${{ inputs.instance }}
           PLYNTH_TOKEN: ${{ inputs.command != 'dry-run' && (steps.app.outputs.token || secrets.LIVE_TOKEN) || '' }}
         run: |
+          # The steps above checked template and instance; this step only runs
+          # if they passed.
           mkdir -p state
+          case "$COMMAND" in
+            create|resolve)
+              if [ -z "$PLYNTH_TOKEN" ]; then
+                echo "::error::No write credential in live-write: set the LIVE_APP_CLIENT_ID and LIVE_APP_OWNER variables and the LIVE_APP_PRIVATE_KEY secret, or the LIVE_TOKEN secret, on the live-write environment"
+                exit 2
+              fi
+              ;;
+          esac
           case "$COMMAND" in
             dry-run)
               plynth create --template "$TEMPLATE" --instance "$INSTANCE" --dry-run
