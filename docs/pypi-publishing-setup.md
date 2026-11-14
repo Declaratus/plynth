@@ -36,41 +36,38 @@ In `Declaratus/plynth` → **Settings → Environments → New environment**.
 
 No secrets are required. OIDC handles authentication.
 
-## 3. Bump the version
+## 3. Versions and tags
 
-Update `pyproject.toml` and `plynth/__init__.py` from `0.3.0.dev0` to
-the release version (e.g. `0.3.0`). Commit on `main`. Hatchling reads
-`pyproject.toml`'s `[project] version`, so the artifact filenames
-match the tag.
+Releases go through release-please (see `CONTRIBUTING.md`). Merging its
+release pull request bumps `pyproject.toml` and `plynth/__init__.py`,
+creates the `vX.Y.Z` tag and a draft GitHub Release. The tag starts
+`release.yml`, which checks that the wheel's version matches the tag,
+publishes to PyPI, then attaches the wheel and sdist to the draft and
+publishes it. The GitHub Release is only published once PyPI has the files.
 
-## 4. Dry-run the release pipeline
+## 4. Release candidates
 
-Before tagging the real release, push an `-rc` tag to verify the binding:
-
-```bash
-git tag v0.3.0-rc1
-git push origin v0.3.0-rc1
-```
-
-Watch the **release** workflow run. All three jobs (`build`,
-`pypi-publish`, `github-release`) must turn green. If `pypi-publish`
-fails with a 403 mentioning OIDC, the pending-publisher entry from
-step 1 is missing or has a typo.
-
-After a successful dry run, yank the rc on PyPI and continue with the
-real tag:
+A release candidate is a tag pushed by hand. PyPI needs its own version
+for it, so first merge a pull request that sets `pyproject.toml` and
+`plynth/__init__.py` to the candidate version, such as `0.5.0rc1`, then
+tag that commit:
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag -a v0.5.0-rc.1 -m v0.5.0-rc.1 <commit>
+git push origin v0.5.0-rc.1
 ```
+
+`release.yml` compares versions the way pip does, so `v0.5.0-rc.1` matches
+`0.5.0rc1`. The candidate is published to PyPI and as a GitHub prerelease
+with generated notes. If `pypi-publish` fails with a 403 mentioning OIDC,
+the pending-publisher entry from step 1 is missing or has a typo.
 
 ## 5. Verify
 
 ```bash
-pipx install plynth==0.3.0
+pipx install plynth==<version>
 plynth --help
 ```
 
-The GitHub Release page for `v0.3.0` should have the wheel and sdist
+The GitHub Release page for the tag should have the wheel and sdist
 attached.
