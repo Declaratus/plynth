@@ -12,10 +12,10 @@ As of 14 Nov 2026. Plan: Team (example-org). Build only what is listed here.
 
 ## Projects
 
-| Project | Owner (type) | Visibility | Holds | Never holds |
-|---|---|---|---|---|
-| Payments platform | example-org (org) | private | issues from example-org/api, example-org/web, example-org/infra and parents in example-org/portfolio | any item from example-user/partner-pilot |
-| Partner pilot | example-user (user) | private | issues from example-user/partner-pilot | items from example-org repos |
+| Project | Owner (type) | Why this owner | Visibility | Holds | Never holds |
+|---|---|---|---|---|---|
+| Payments platform | example-org (org) | every org engineer reads it | private | issues from example-org/api, example-org/web, example-org/infra and parents in example-org/portfolio | any item from example-user/partner-pilot |
+| Partner pilot | example-user (user) | its field values and status updates name the pilot, and org owners and apps can read every org Project | private | issues from example-user/partner-pilot | items from example-org repos |
 
 - New Projects. The two untitled example-org Projects are closed after the move.
 

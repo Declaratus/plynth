@@ -12,9 +12,9 @@ As of <date>. Plan: <Free | Team | Enterprise Cloud>. Build only what is listed 
 
 ## Projects
 
-| Project | Owner (type) | Visibility | Holds | Never holds |
-|---|---|---|---|---|
-| <title> | <login> (org or user) | private or public | <repos or item kinds> | <rule the reviewer can check> |
+| Project | Owner (type) | Why this owner | Visibility | Holds | Never holds |
+|---|---|---|---|---|---|
+| <title> | <login> (org or user) | <the audience boundary or workflow that decides it> | private or public | <repos or item kinds> | <rule the reviewer can check> |
 
 - Reused or new: <which existing Project, and what gets cleaned up>
 
