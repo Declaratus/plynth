@@ -32,3 +32,6 @@ id_ed25519*
 
 # local denylist of terms that must never be committed
 .plynth-denylist
+
+# shipped adapter files, tracked even when a global ignore excludes .claude/
+!adapters/claude/.claude/
