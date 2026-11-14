@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.0](https://github.com/Declaratus/plynth/compare/v0.4.0...v0.5.0) (2026-11-14)
+
+
+### Features
+
+* add a portfolio and intake bootstrap template that creates fields and views without duplicate issues ([2091292](https://github.com/Declaratus/plynth/commit/209129258eec09943f0929def282dfd1645884ef))
+* create organization Project views on GitHub.com and GHEC with `views[].create: true` ([2091292](https://github.com/Declaratus/plynth/commit/209129258eec09943f0929def282dfd1645884ef))
+* recover views created remotely and checkpoint pending view creations so uncertain writes are not replayed ([2091292](https://github.com/Declaratus/plynth/commit/209129258eec09943f0929def282dfd1645884ef))
+* show view creation in dry-run output and `api_call_estimate.views_create` ([2091292](https://github.com/Declaratus/plynth/commit/209129258eec09943f0929def282dfd1645884ef))
+* write state schema 1.1 for runs that use views, with clear errors for view failures ([2091292](https://github.com/Declaratus/plynth/commit/209129258eec09943f0929def282dfd1645884ef))
+
 ## [0.4.0] — 2026-05-10
 
 Closes the bootstrap loop: repo creation, GHES version probe, configurable
