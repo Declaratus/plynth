@@ -16,10 +16,10 @@ jobs:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -46,9 +46,9 @@ jobs:
     name: Dependency audit (pip-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -59,7 +59,7 @@ jobs:
       # pollute the scanned set. Fails on any reported vulnerability;
       # to suppress a specific advisory, see the `ignore-vulns` input
       # documented in CONTRIBUTING.md.
-      - uses: pypa/gh-action-pip-audit@v1.1.0
+      - uses: pypa/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
         with:
           local: true
           # Both CVEs are in pip itself (the runner's installed package

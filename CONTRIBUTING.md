@@ -70,9 +70,11 @@ Types: `feat`, `fix`, `perf`, `revert`, `docs`, `ci`, `chore`, `test`,
 such as `feat!: drop the GHES_TOKEN fallback`.
 
 Pull requests are squash-merged, so the title becomes the commit message and
-the changelog entry: write it for someone using plynth. `feat` and `fix`
-changes are listed in the changelog; `docs`, `ci`, `chore` and `test`
-changes are not. A pull request with several user-facing changes can list
+the changelog entry: write it for someone using plynth. `feat`, `fix`,
+`perf`, `revert` and `deps` changes are listed in the changelog and start a
+release. `docs`, `ci`, `chore`, `test`, `build`, `style` and `refactor`
+changes are left out of the changelog and never start a release on their
+own, unless marked as breaking. A pull request with several user-facing changes can list
 them in its description, one Conventional Commit per change with a blank
 line between, inside a `BEGIN_COMMIT_OVERRIDE` / `END_COMMIT_OVERRIDE` block.
 

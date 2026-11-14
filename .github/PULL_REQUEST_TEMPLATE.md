@@ -25,6 +25,6 @@
 - [ ] `ruff check .` passes
 - [ ] `ruff format --check .` passes
 - [ ] `mypy plynth` passes
-- [ ] PR title is a Conventional Commit (`feat:`, `fix:`, `docs:`, ...); it becomes the changelog entry
+- [ ] PR title is a Conventional Commit (`feat:`, `fix:`, `docs:`, ...); for `feat`, `fix`, `perf`, `revert` and `deps` it becomes the changelog entry
 - [ ] No `--token` flag with a literal value committed in any YAML, shell script, or workflow file
 - [ ] No `PLYNTH_TOKEN` value committed (only references such as `${{ secrets.PLYNTH_TOKEN }}` are OK)
