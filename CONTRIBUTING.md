@@ -97,7 +97,9 @@ with the next version and its changelog entry. Merging it bumps
 `pyproject.toml` and `plynth/__init__.py`, tags `vX.Y.Z` and creates a draft
 GitHub Release. The tag starts the release workflow, which publishes to PyPI
 and then publishes the GitHub Release with the wheel and sdist attached.
-Release candidates are tags pushed by hand; see
+Release candidates are tags pushed by hand, such as `v0.5.0-rc.1`; the
+release workflow builds them with the tag's version (`0.5.0rc1`), so nobody
+bumps version files by hand. See
 [docs/pypi-publishing-setup.md](docs/pypi-publishing-setup.md).
 
 ## Authentication in tests

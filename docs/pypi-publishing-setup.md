@@ -41,24 +41,24 @@ No secrets are required. OIDC handles authentication.
 Releases go through release-please (see `CONTRIBUTING.md`). Merging its
 release pull request bumps `pyproject.toml` and `plynth/__init__.py`,
 creates the `vX.Y.Z` tag and a draft GitHub Release. The tag starts
-`release.yml`, which checks that the wheel's version matches the tag,
+`release.yml`, which checks that the version files and the build match the tag,
 publishes to PyPI, then attaches the wheel and sdist to the draft and
 publishes it. The GitHub Release is only published once PyPI has the files.
 
 ## 4. Release candidates
 
-A release candidate is a tag pushed by hand. PyPI needs its own version
-for it, so first merge a pull request that sets `pyproject.toml` and
-`plynth/__init__.py` to the candidate version, such as `0.5.0rc1`, then
-tag that commit:
+A release candidate is a tag pushed by hand on `main`:
 
 ```bash
 git tag -a v0.5.0-rc.1 -m v0.5.0-rc.1 <commit>
 git push origin v0.5.0-rc.1
 ```
 
-`release.yml` compares versions the way pip does, so `v0.5.0-rc.1` matches
-`0.5.0rc1`. The candidate is published to PyPI and as a GitHub prerelease
+The tag is the version: `release.yml` builds the candidate with the tag's
+version in PEP 440 form (`v0.5.0-rc.1` is `0.5.0rc1`, `-beta.N` is `bN`,
+`-alpha.N` is `aN`), writing it into the version files in its own workspace
+only. Don't bump the version files by hand; release-please owns them. The
+candidate is published to PyPI as a prerelease and as a GitHub prerelease
 with generated notes. If `pypi-publish` fails with a 403 mentioning OIDC,
 the pending-publisher entry from step 1 is missing or has a typo.
 

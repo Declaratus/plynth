@@ -21,24 +21,70 @@ jobs:
       - name: Install build
         run: python -m pip install --upgrade build
 
+      # The tag is the version. A final tag (vX.Y.Z) must match the version
+      # files, which release-please bumps in the release pull request. A tag
+      # with a suffix (vX.Y.Z-rc.N, -beta.N, -alpha.N) is built with the tag's
+      # version in PEP 440 form, written into the version files here only and
+      # never committed.
+      - name: Set the version from the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          num='(0|[1-9][0-9]*)'
+          if [[ "$TAG" =~ ^v($num\.$num\.$num)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            kind=final
+          elif [[ "$TAG" =~ ^v($num\.$num\.$num)-(rc|alpha|a|beta|b)\.$num$ ]]; then
+            case "${BASH_REMATCH[5]}" in
+              rc) pre=rc ;;
+              alpha|a) pre=a ;;
+              beta|b) pre=b ;;
+            esac
+            version="${BASH_REMATCH[1]}${pre}${BASH_REMATCH[6]}"
+            kind=prerelease
+          else
+            echo "::error::Tag $TAG is not vX.Y.Z or vX.Y.Z-rc.N, -beta.N (-b.N) or -alpha.N (-a.N)"
+            exit 1
+          fi
+          echo "Tag $TAG is $kind version $version"
+
+          if [ "$kind" = prerelease ]; then
+            sed -i -E "s/^version = \"[^\"]*\"$/version = \"$version\"/" pyproject.toml
+            sed -i -E "s/^__version__ = \"[^\"]*\"$/__version__ = \"$version\"/" plynth/__init__.py
+          fi
+          status=0
+          check() {
+            if ! grep -Fxq "$2 = \"$version\"" "$1"; then
+              echo "::error file=$1::$1 does not have version $version for tag $TAG"
+              status=1
+            fi
+          }
+          check pyproject.toml version
+          check plynth/__init__.py __version__
+          [ "$status" -eq 0 ] || exit 1
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
       - name: Build distributions
         run: python -m build
 
       - name: Check the build has the tag's version
-        env:
-          TAG: ${{ github.ref_name }}
         run: |
           python - <<'PY'
           import os
           import pathlib
 
-          from packaging.version import Version
-
-          tag = Version(os.environ["TAG"].removeprefix("v"))
-          for wheel in pathlib.Path("dist").glob("*.whl"):
-              built = Version(wheel.name.split("-")[1])
-              if built != tag:
-                  raise SystemExit(f"{wheel.name} is version {built}, but the tag is {tag}")
+          expected = os.environ["VERSION"]
+          dist = pathlib.Path("dist")
+          # Wheel: name-version-tags.whl. Sdist: name-version.tar.gz.
+          builds = {w.name: w.name.split("-")[1] for w in dist.glob("*.whl")}
+          for sdist in dist.glob("*.tar.gz"):
+              builds[sdist.name] = sdist.name.removesuffix(".tar.gz").rsplit("-", 1)[1]
+          if not builds:
+              raise SystemExit("No wheel or sdist in dist/")
+          for name, built in builds.items():
+              if built != expected:
+                  raise SystemExit(f"{name} is version {built}, but the tag needs {expected}")
+              print(f"{name}: {built}")
           PY
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
