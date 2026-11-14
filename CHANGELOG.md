@@ -10,6 +10,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- `board-spec` agent skill (`skills/codex/board-spec/`) for designing a
+  GitHub Projects board before building it, with a thin Claude adapter and a
+  read-only `board-reviewer` subagent that checks a live board against its
+  spec. The tool map lists which steps belong to plynth, mendrik, eyrl and the
+  GitHub Projects MCP, and which are web UI only.
 - Opt-in organization Project view creation on GitHub.com/GHEC through the
   REST API. `views[].create: true` creates name, layout and `filter_query`
   in Phase 6; confirmed view IDs/URLs are checkpointed for resume.
