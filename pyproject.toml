@@ -2,6 +2,13 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.sdist]
+# The source archive is public on PyPI, so it carries only what is needed to
+# build and use the package. Docs, tests and repository tooling stay in the
+# repository. .github/scripts/check_dist_contents.py checks the built archive
+# against this list before release.
+only-include = ["plynth", "pyproject.toml", "README.md", "LICENSE", "CHANGELOG.md"]
+
 [project]
 name = "plynth"
 version = "0.4.0"
