@@ -11,7 +11,7 @@ only-include = ["plynth", "pyproject.toml", "README.md", "LICENSE", "CHANGELOG.m
 
 [project]
 name = "plynth"
-version = "0.4.0"
+version = "0.5.0"
 description = "Declarative project plans, materialized as GitHub Projects (and other backends)."
 readme = "README.md"
 requires-python = ">=3.9"
