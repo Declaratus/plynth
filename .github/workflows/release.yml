@@ -12,19 +12,82 @@ jobs:
     name: Build sdist + wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
 
       - name: Install build
         run: python -m pip install --upgrade build
 
+      # The tag is the version. A final tag (vX.Y.Z) must match the version
+      # files, which release-please bumps in the release pull request. A tag
+      # with a suffix (vX.Y.Z-rc.N, -beta.N, -alpha.N) is built with the tag's
+      # version in PEP 440 form, written into the version files here only and
+      # never committed.
+      - name: Set the version from the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          num='(0|[1-9][0-9]*)'
+          if [[ "$TAG" =~ ^v($num\.$num\.$num)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            kind=final
+          elif [[ "$TAG" =~ ^v($num\.$num\.$num)-(rc|alpha|a|beta|b)\.$num$ ]]; then
+            case "${BASH_REMATCH[5]}" in
+              rc) pre=rc ;;
+              alpha|a) pre=a ;;
+              beta|b) pre=b ;;
+            esac
+            version="${BASH_REMATCH[1]}${pre}${BASH_REMATCH[6]}"
+            kind=prerelease
+          else
+            echo "::error::Tag $TAG is not vX.Y.Z or vX.Y.Z-rc.N, -beta.N (-b.N) or -alpha.N (-a.N)"
+            exit 1
+          fi
+          echo "Tag $TAG is $kind version $version"
+
+          if [ "$kind" = prerelease ]; then
+            sed -i -E "s/^version = \"[^\"]*\"$/version = \"$version\"/" pyproject.toml
+            sed -i -E "s/^__version__ = \"[^\"]*\"$/__version__ = \"$version\"/" plynth/__init__.py
+          fi
+          status=0
+          check() {
+            if ! grep -Fxq "$2 = \"$version\"" "$1"; then
+              echo "::error file=$1::$1 does not have version $version for tag $TAG"
+              status=1
+            fi
+          }
+          check pyproject.toml version
+          check plynth/__init__.py __version__
+          [ "$status" -eq 0 ] || exit 1
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
       - name: Build distributions
         run: python -m build
 
-      - uses: actions/upload-artifact@v7
+      - name: Check the build has the tag's version
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+
+          expected = os.environ["VERSION"]
+          dist = pathlib.Path("dist")
+          # Wheel: name-version-tags.whl. Sdist: name-version.tar.gz.
+          builds = {w.name: w.name.split("-")[1] for w in dist.glob("*.whl")}
+          for sdist in dist.glob("*.tar.gz"):
+              builds[sdist.name] = sdist.name.removesuffix(".tar.gz").rsplit("-", 1)[1]
+          if not builds:
+              raise SystemExit("No wheel or sdist in dist/")
+          for name, built in builds.items():
+              if built != expected:
+                  raise SystemExit(f"{name} is version {built}, but the tag needs {expected}")
+              print(f"{name}: {built}")
+          PY
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist/
@@ -40,27 +103,39 @@ jobs:
     permissions:
       id-token: write  # OIDC for Trusted Publishing — no API token required.
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
           path: dist/
 
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
 
   github-release:
-    name: Create GitHub Release
-    needs: build
+    name: Publish the GitHub Release
+    # Only after PyPI has the release, so a failed upload leaves the draft unpublished.
+    needs: [build, pypi-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
           path: dist/
 
-      - uses: softprops/action-gh-release@v3
-        with:
-          files: dist/*
-          generate_release_notes: true
-          draft: false
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --json isDraft >/dev/null 2>&1; then
+            # release-please made a draft with the changelog entry as notes.
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --draft=false
+          else
+            # A tag pushed by hand, such as a release candidate.
+            pre=""
+            case "$TAG" in *-*) pre="--prerelease" ;; esac
+            gh release create "$TAG" dist/* --verify-tag --title "$TAG" --generate-notes $pre
+          fi

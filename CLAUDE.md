@@ -24,8 +24,9 @@ uv run --isolated --python 3.9 --with-editable ".[dev]" pytest -q
 ```
 
 The test suite mocks all HTTP with `responses`; no token or live instance is
-needed. User-facing changes get an entry under `## [Unreleased]` in
-`CHANGELOG.md`.
+needed. Don't edit `CHANGELOG.md` by hand: release-please writes it from
+Conventional Commit pull request titles (see `CONTRIBUTING.md`), so give
+user-facing changes a `feat:` or `fix:` title.
 
 ## Live runs
 

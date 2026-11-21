@@ -58,15 +58,25 @@ CI runs two additional security gates on every PR and on push to `main`:
 
 ## Commit messages
 
-Use the conventional commit format:
+Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/),
+and the `pr-title` check enforces it:
 
 ```
-<type>: <short description>
-
-[optional body]
+<type>(<optional scope>): <short description>
 ```
 
-Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
+Types: `feat`, `fix`, `perf`, `revert`, `docs`, `ci`, `chore`, `test`,
+`build`, `style`, `refactor`. Put `!` after the type for a breaking change,
+such as `feat!: drop the GHES_TOKEN fallback`.
+
+Pull requests are squash-merged, so the title becomes the commit message and
+the changelog entry: write it for someone using plynth. `feat`, `fix`,
+`perf`, `revert` and `deps` changes are listed in the changelog and start a
+release. `docs`, `ci`, `chore`, `test`, `build`, `style` and `refactor`
+changes are left out of the changelog and never start a release on their
+own, unless marked as breaking. A pull request with several user-facing changes can list
+them in its description, one Conventional Commit per change with a blank
+line between, inside a `BEGIN_COMMIT_OVERRIDE` / `END_COMMIT_OVERRIDE` block.
 
 Keep the subject line under 72 characters.
 Reference issues where applicable: `fixes #42`.
@@ -76,9 +86,23 @@ Reference issues where applicable: `fixes #42`.
 1. Fork or branch from `main`.
 2. Make changes. Add or update tests for any behaviour change.
 3. Run `ruff check .`, `ruff format --check .`, `mypy plynth`, and `pytest -q` locally.
-4. Update `CHANGELOG.md` under `## [Unreleased]`.
-5. Open a PR against `main`. Fill in the PR template.
-6. CI must pass before merge.
+4. Open a PR against `main` with a Conventional Commit title. Fill in the PR template.
+5. CI must pass before merge.
+
+`CHANGELOG.md` is written by release-please from pull request titles; don't
+edit it by hand.
+
+## Releases
+
+release-please keeps a release pull request open, `chore(main): release X.Y.Z`,
+with the next version and its changelog entry. Merging it bumps
+`pyproject.toml` and `plynth/__init__.py`, tags `vX.Y.Z` and creates a draft
+GitHub Release. The tag starts the release workflow, which publishes to PyPI
+and then publishes the GitHub Release with the wheel and sdist attached.
+Release candidates are tags pushed by hand, such as `v0.5.0-rc.1`; the
+release workflow builds them with the tag's version (`0.5.0rc1`), so nobody
+bumps version files by hand. See
+[docs/pypi-publishing-setup.md](docs/pypi-publishing-setup.md).
 
 ## Authentication in tests
 
